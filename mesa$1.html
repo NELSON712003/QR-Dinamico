@@ -818,6 +818,7 @@
             border-radius: 3px;
         }
     </style>
+<base target="_blank">
 </head>
 <body>
     <div class="container">
@@ -857,7 +858,7 @@
                     <!-- Botón REPETIR superior delgado -->
                     <div class="btn-repetir-container">
                         <button class="btn-repetir" id="btnRepetir" onclick="toggleRecording()">
-                            🔴 REPETIR
+                            🔴 GRABAR JUGADA
                         </button>
                     </div>
 
@@ -1540,7 +1541,7 @@
             
             // Actualizar UI
             document.getElementById('btnRepetir').classList.remove('recording');
-            document.getElementById('btnRepetir').textContent = '🔴 REPETIR';
+            document.getElementById('btnRepetir').textContent = '🔴 GRABAR JUGADA';
         }
 
         function updateRecordingTime() {
@@ -1601,7 +1602,7 @@
             };
             
             playbackVideo.onended = () => {
-                document.getElementById('btnRepetir').textContent = '🔴 REPETIR';
+                document.getElementById('btnRepetir').textContent = '🔴 GRABAR JUGADA';
             };
             
             updateRecordingsList();
