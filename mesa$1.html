@@ -1816,8 +1816,33 @@
             document.getElementById('btnTiempo').textContent = '▶️ TIEMPO JUGADOR';
             document.getElementById('btnTiempo').onclick = startGame;
             
+            // BORRAR TODAS LAS GRABACIONES DEL HISTORIAL
+            deleteAllRecordings();
+
             hideResetModal();
             playBeep(600, 200);
+        }
+
+        // ============================================
+        // FUNCIÓN PARA BORRAR TODAS LAS GRABACIONES
+        // ============================================
+        async function deleteAllRecordings() {
+            if (!db) await initIndexedDB();
+
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.clear();
+
+                request.onsuccess = () => {
+                    recordings = [];
+                    stopPlayback();
+                    updateRecordingsList();
+                    console.log('✅ Todas las grabaciones han sido eliminadas');
+                    resolve();
+                };
+                request.onerror = () => reject(request.error);
+            });
         }
 
         // ============================================
