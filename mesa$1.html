@@ -1497,16 +1497,14 @@
                 mediaRecorder.onstop = async () => {
                     const blob = new Blob(recordedChunks, { type: options.mimeType });
                     const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
-                    
+
                     try {
                         await saveRecordingToDB(blob, duration);
                         playBeep(600, 300, 'sine');
                         updateRecordingsList();
-                        
-                        if (recordings.length > 0) {
-                            showPlaybackPanel();
-                            playRecording(recordings[0].id);
-                        }
+
+                        // EL PANEL DE REPRODUCCIÓN NO SE ABRE AUTOMÁTICAMENTE
+                        // El usuario debe usar el botón deslizable para ver las grabaciones
                     } catch (err) {
                         console.error('Error guardando grabación:', err);
                     }
@@ -1568,31 +1566,48 @@
             stopPlayback();
         }
 
+        // ============================================
+        // CERRAR SOLO EL PANEL SIN DETENER REPRODUCCIÓN
+        // ============================================
+        function closePlaybackPanelOnly() {
+            // Cierra el panel deslizable pero mantiene el video reproduciéndose
+            document.getElementById('playbackControls').classList.remove('expanded');
+        }
+
         function playRecording(id) {
             const recording = recordings.find(r => r.id === id);
             if (!recording) return;
-            
-            stopPlayback();
-            
+
+            // Detener reproducción anterior si existe
+            if (currentPlaybackUrl) {
+                URL.revokeObjectURL(currentPlaybackUrl);
+                currentPlaybackUrl = null;
+            }
+
             currentPlaybackUrl = URL.createObjectURL(recording.blob);
             currentRecordingId = id;
-            
+
             const playbackVideo = document.getElementById('playbackVideo');
             const cameraFeed = document.getElementById('cameraFeed');
             const cameraPlaceholder = document.getElementById('cameraPlaceholder');
-            
+
+            // Mostrar video de reproducción y ocultar cámara
             playbackVideo.src = currentPlaybackUrl;
             playbackVideo.classList.remove('hidden');
             cameraFeed.classList.add('hidden');
             cameraPlaceholder.classList.add('hidden');
-            
+
+            // CERRAR AUTOMÁTICAMENTE EL PANEL DE REPRODUCCIÓN AL SELECCIONAR GRABACIÓN
+            // para dejar ver el video de repetición completo
+            closePlaybackPanelOnly();
+
             playbackVideo.onloadedmetadata = () => {
                 const slider = document.getElementById('videoSlider');
                 slider.max = playbackVideo.duration;
                 document.getElementById('totalTime').textContent = formatTime(playbackVideo.duration);
                 playbackVideo.play();
             };
-            
+
             playbackVideo.ontimeupdate = () => {
                 if (!isPlayingFromSlider) {
                     const slider = document.getElementById('videoSlider');
@@ -1600,11 +1615,11 @@
                     document.getElementById('currentTime').textContent = formatTime(playbackVideo.currentTime);
                 }
             };
-            
+
             playbackVideo.onended = () => {
                 document.getElementById('btnRepetir').textContent = '🔴 GRABAR JUGADA';
             };
-            
+
             updateRecordingsList();
         }
 
@@ -1838,6 +1853,8 @@
                     recordings = [];
                     stopPlayback();
                     updateRecordingsList();
+                    // CERRAR AUTOMÁTICAMENTE EL PANEL DE REPRODUCCIÓN
+                    closePlayback();
                     console.log('✅ Todas las grabaciones han sido eliminadas');
                     resolve();
                 };
