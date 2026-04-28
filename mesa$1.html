@@ -178,7 +178,7 @@
 
         .player-card.white-theme {
             background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
-            color: #2c3e50;
+            color: #000;
             border-color: #95a5a6;
         }
 
@@ -194,6 +194,10 @@
             color: #000;
         }
 
+        .player-card.white-theme .player-number {
+            color: #000;
+        }
+
         .score-display {
             flex: 1;
             display: flex;
@@ -204,7 +208,7 @@
         }
 
         .player-score {
-            font-size: 10em;
+            font-size: 70px;
             font-weight: bold;
             cursor: pointer;
             transition: transform 0.1s;
@@ -213,6 +217,11 @@
         }
 
         .player-card.yellow-theme .player-score {
+            color: #000;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.3);
+        }
+
+        .player-card.white-theme .player-score {
             color: #000;
             text-shadow: 2px 2px 4px rgba(255,255,255,0.3);
         }
@@ -790,7 +799,7 @@
         /* Responsive */
         @media (max-width: 1400px) {
             .player-score {
-                font-size: 4em;
+                font-size: 55px;
             }
             .score-btn {
                 height: 35px;
@@ -801,7 +810,7 @@
 
         @media (max-width: 1200px) {
             .player-score {
-                font-size: 3em;
+                font-size: 45px;
             }
             .score-btn {
                 height: 30px;
@@ -812,6 +821,21 @@
                 min-width: 200px;
             }
         }
+
+        /* Ajuste cuando hay 5-6 jugadores activos - pantalla completa */
+        @media (min-height: 800px) {
+            .players-left:has(.player-card:nth-child(3)),
+            .players-right:has(.player-card:nth-child(3)) {
+                /* cuando hay 3 tarjetas por columna */
+            }
+        }
+
+        /* Ajuste dinámico según cantidad de jugadores visibles */
+        .player-card .player-score {
+            font-size: 70px;
+        }
+
+
 
         /* Scrollbar personalizada */
         .recordings-list::-webkit-scrollbar {
