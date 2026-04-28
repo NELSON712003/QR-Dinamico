@@ -173,6 +173,7 @@
         .player-card.yellow-theme {
             background: #ffff5e;
             border-color: #d68910;
+            color: #000;
         }
 
         .player-card.white-theme {
@@ -189,6 +190,10 @@
             margin-bottom: 10px;
         }
 
+        .player-card.yellow-theme .player-number {
+            color: #000;
+        }
+
         .score-display {
             flex: 1;
             display: flex;
@@ -199,12 +204,17 @@
         }
 
         .player-score {
-            font-size: 5em;
+            font-size: 10em;
             font-weight: bold;
             cursor: pointer;
             transition: transform 0.1s;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
             user-select: none;
+        }
+
+        .player-card.yellow-theme .player-score {
+            color: #000;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.3);
         }
 
         .player-score:active {
@@ -817,7 +827,39 @@
             background: #3498db;
             border-radius: 3px;
         }
+
+        /* Botón de Pantalla Completa */
+        .fullscreen-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            background: #0f3460;
+            border: 2px solid #3498db;
+            color: #fff;
+            font-size: 1.5em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            z-index: 100;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .fullscreen-btn:hover {
+            background: #3498db;
+            transform: scale(1.1);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+        }
+
+        .fullscreen-btn:active {
+            transform: scale(0.95);
+        }
     </style>
+<base target="_blank">
 <base target="_blank">
 <base target="_blank">
 </head>
@@ -1915,6 +1957,70 @@
 
         // Iniciar aplicación
         init();
+
+        // ============================================
+        // FULLSCREEN FUNCTION
+        // ============================================
+        function toggleFullscreen() {
+            const btn = document.getElementById('fullscreenBtn');
+
+            if (!document.fullscreenElement && 
+                !document.mozFullScreenElement && 
+                !document.webkitFullscreenElement && 
+                !document.msFullscreenElement) {
+                // Entrar a pantalla completa
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.mozRequestFullScreen) {
+                    document.documentElement.mozRequestFullScreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) {
+                    document.documentElement.msRequestFullscreen();
+                }
+                btn.innerHTML = '⛶';
+                btn.title = 'Salir de Pantalla Completa';
+            } else {
+                // Salir de pantalla completa
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                btn.innerHTML = '⛶';
+                btn.title = 'Pantalla Completa';
+            }
+        }
+
+        // Detectar cambios de pantalla completa para actualizar el ícono
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+        document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
+        document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
+
+        function updateFullscreenIcon() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (document.fullscreenElement || 
+                document.webkitFullscreenElement || 
+                document.mozFullScreenElement || 
+                document.msFullscreenElement) {
+                btn.innerHTML = '⛶';
+                btn.title = 'Salir de Pantalla Completa';
+            } else {
+                btn.innerHTML = '⛶';
+                btn.title = 'Pantalla Completa';
+            }
+        }
     </script>
+
+    <!-- Botón Pantalla Completa -->
+    <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Pantalla Completa">
+        ⛶
+    </button>
+
 </body>
 </html>
