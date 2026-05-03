@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🔴 Transmisión Mesa 1 - Viewer</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: #1a1a2e;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #e94560;
+            flex-shrink: 0;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header h1 { color: #e94560; font-size: 1.5em; }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-reconnect {
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-reconnect:hover {
+            background: #2980b9;
+            transform: scale(1.05);
+        }
+        .btn-reconnect:active {
+            transform: scale(0.95);
+        }
+
+        .live-badge {
+            background: #e74c3c;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+        }
+        .video-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .video-frame {
+            position: relative;
+            border: 4px solid #e94560;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.5), 
+                        inset 0 0 30px rgba(233, 69, 96, 0.1);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: width 0.3s ease, height 0.3s ease;
+        }
+
+        .video-frame video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+            display: block;
+        }
+
+        /* ============ RESPONSIVE SIZES ============ */
+
+        /* Mobile (celulares) */
+        @media (max-width: 767px) {
+            .header {
+                padding: 10px 15px;
+            }
+            .header h1 {
+                font-size: 1em;
+            }
+            .btn-reconnect {
+                padding: 6px 12px;
+                font-size: 0.75em;
+            }
+            .live-badge {
+                padding: 4px 10px;
+                font-size: 0.7em;
+            }
+            .video-frame {
+                width: 100vw;
+                height: 56.25vw;
+                max-width: 100%;
+                max-height: calc(100vh - 60px);
+                border-width: 2px;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            .fullscreen-btn {
+                padding: 8px;
+                font-size: 1em;
+            }
+            .volume-control {
+                bottom: 10px;
+                left: 10px;
+                padding: 8px 12px;
+                gap: 8px;
+            }
+            .volume-control input[type="range"] {
+                width: 80px;
+            }
+            .volume-control .vol-label {
+                font-size: 0.7em;
+            }
+        }
+
+        /* Tablet */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .header {
+                padding: 12px 20px;
+            }
+            .header h1 {
+                font-size: 1.2em;
+            }
+            .video-frame {
+                width: 90vw;
+                height: 50.625vw;
+                max-width: 900px;
+                max-height: calc(100vh - 80px);
+                border-width: 3px;
+            }
+        }
+
+        /* Desktop / Computador */
+        @media (min-width: 1025px) {
+            .video-frame {
+                width: 80vw;
+                height: 45vw;
+                max-width: 1200px;
+                max-height: calc(100vh - 80px);
+            }
+        }
+
+        /* Landscape mobile */
+        @media (max-width: 767px) and (orientation: landscape) {
+            .video-frame {
+                width: auto;
+                height: calc(100vh - 60px);
+                aspect-ratio: 16/9;
+            }
+            .header h1 {
+                font-size: 0.9em;
+            }
+        }
+
+        /* Landscape tablet */
+        @media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+            .video-frame {
+                width: auto;
+                height: calc(100vh - 80px);
+                aspect-ratio: 16/9;
+                max-width: 90vw;
+            }
+        }
+
+        .fullscreen-btn {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            z-index: 60;
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .fullscreen-btn:hover {
+            background: rgba(233, 69, 96, 0.8);
+            border-color: #e94560;
+            transform: scale(1.1);
+        }
+
+        .fullscreen-btn.hidden-auto {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* Volume Control */
+        .volume-control {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 60;
+            transition: all 0.3s ease;
+        }
+
+        .volume-control .vol-icon {
+            font-size: 1.2em;
+            cursor: pointer;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .volume-control input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 120px;
+            height: 6px;
+            background: linear-gradient(to right, #e94560 0%, #e94560 30%, #444 30%, #444 100%);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .volume-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #e94560;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(233, 69, 96, 0.5);
+        }
+
+        .volume-control input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #e94560;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(233, 69, 96, 0.5);
+        }
+
+        .volume-control .vol-label {
+            font-size: 0.75em;
+            color: #aaa;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .volume-control.hidden-auto {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .waiting-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #888;
+            padding: 20px;
+        }
+        .waiting-message .icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .connection-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.9);
+            border: 2px solid #0f3460;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 200px;
+            z-index: 100;
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .stats-overlay {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            border: 1px solid #333;
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h1>🏆 MESA 1 - Transmisión Fernando Arenas</h1>
+            </div>
+            <div class="header-right">
+                <button class="btn-reconnect" onclick="manualReconnect()" title="Reconectar transmisión">
+                    🔄 Reconectar
+                </button>
+                <div class="live-badge" id="liveBadge">EN VIVO</div>
+            </div>
+        </div>
+
+        <div class="video-container">
+            <div class="waiting-message" id="waitingMessage">
+                <div class="icon">📡</div>
+                <div id="waitingText">Conectando a la transmisión...</div>
+            </div>
+
+            <div class="video-frame hidden" id="videoFrame">
+                <video id="videoPlayer" autoplay playsinline muted></video>
+
+                <div class="volume-control" id="volumeControl">
+                    <span class="vol-icon" id="volIcon" onclick="toggleMute()">🔇</span>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="30" oninput="onVolumeChange(this.value)">
+                    <span class="vol-label" id="volLabel">30%</span>
+                </div>
+
+                <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
+            </div>
+
+            <div class="connection-panel" id="connectionPanel">
+                <div class="status-row">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Inicializando...</span>
+                </div>
+                <div class="current-status" id="currentStatus">Esperando conexión...</div>
+                <div class="peer-id" id="peerId">-</div>
+                <div class="controls">
+                    <button class="btn" id="reconnectBtnHidden" onclick="manualReconnect()">🔄 Reconectar</button>
+                    <button class="btn" id="muteBtn" onclick="toggleMute()">🔇 Silenciado</button>
+                </div>
+            </div>
+
+            <div class="stats-overlay" id="statsOverlay">
+                <div>Resolución: <span id="resStat">-</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BROADCASTER_ID = 'mesa1-broadcaster-001';
+        const PEER_CONFIG = {
+            host: '0.peerjs.com',
+            port: 443,
+            secure: true,
+            debug: 1,
+            config: {
+                'iceServers': [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        };
+
+        let peer = null;
+        let currentCall = null;
+        let reconnectAttempts = 0;
+        let isConnected = false;
+        let dummyStream = null;
+        let isMuted = true;
+        let currentVolume = 0.3; // 30% por defecto
+        let hideTimeout = null;
+        const AUTO_HIDE_DELAY = 10000;
+
+        function showControls() {
+            const fsBtn = document.getElementById('fullscreenBtn');
+            const volCtrl = document.getElementById('volumeControl');
+            if (fsBtn) fsBtn.classList.remove('hidden-auto');
+            if (volCtrl) volCtrl.classList.remove('hidden-auto');
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(hideControls, AUTO_HIDE_DELAY);
+        }
+
+        function hideControls() {
+            const fsBtn = document.getElementById('fullscreenBtn');
+            const volCtrl = document.getElementById('volumeControl');
+            if (fsBtn && isConnected) fsBtn.classList.add('hidden-auto');
+            if (volCtrl && isConnected) volCtrl.classList.add('hidden-auto');
+        }
+
+        function resetAutoHideTimer() {
+            showControls();
+        }
+
+        function updateStatus(text, state = 'connecting') {
+            console.log(`[${state.toUpperCase()}] ${text}`);
+
+            const statusText = document.getElementById('statusText');
+            const currentStatus = document.getElementById('currentStatus');
+            const statusDot = document.getElementById('statusDot');
+            const waitingText = document.getElementById('waitingText');
+
+            if (statusText) statusText.textContent = text;
+            if (currentStatus) currentStatus.textContent = text;
+            if (statusDot) statusDot.className = 'status-dot ' + state;
+            if (waitingText) waitingText.textContent = text;
+        }
+
+        function setPeerId(id) {
+            const peerIdEl = document.getElementById('peerId');
+            if (peerIdEl) peerIdEl.textContent = `ID: ${id.substring(0, 12)}...`;
+        }
+
+        async function createDummyStream() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const dest = audioCtx.createMediaStreamDestination();
+                const osc = audioCtx.createOscillator();
+                osc.frequency.value = 0;
+                osc.connect(dest);
+                osc.start();
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 2;
+                canvas.height = 2;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, 2, 2);
+
+                const videoStream = canvas.captureStream(1);
+
+                return new MediaStream([
+                    ...videoStream.getVideoTracks(),
+                    ...dest.stream.getAudioTracks()
+                ]);
+            } catch (err) {
+                console.error('Error stream dummy:', err);
+                const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                return s;
+            }
+        }
+
+        // ====== VOLUME FUNCTIONS ======
+        function onVolumeChange(value) {
+            currentVolume = value / 100;
+            const video = document.getElementById('videoPlayer');
+            const volLabel = document.getElementById('volLabel');
+            const volIcon = document.getElementById('volIcon');
+            const slider = document.getElementById('volumeSlider');
+
+            if (video) {
+                video.volume = currentVolume;
+            }
+            if (volLabel) {
+                volLabel.textContent = value + '%';
+            }
+
+            // Update slider background to show 30% mark
+            if (slider) {
+                const percent = value;
+                slider.style.background = `linear-gradient(to right, #e94560 0%, #e94560 ${percent}%, #444 ${percent}%, #444 100%)`;
+            }
+
+            // Update icon
+            if (volIcon) {
+                if (value == 0) {
+                    volIcon.textContent = '🔇';
+                    isMuted = true;
+                } else if (value < 30) {
+                    volIcon.textContent = '🔈';
+                    isMuted = false;
+                } else if (value < 70) {
+                    volIcon.textContent = '🔉';
+                    isMuted = false;
+                } else {
+                    volIcon.textContent = '🔊';
+                    isMuted = false;
+                }
+            }
+
+            // Unmute if volume > 0
+            if (video && value > 0) {
+                video.muted = false;
+            } else if (video && value == 0) {
+                video.muted = true;
+            }
+        }
+
+        function toggleMute() {
+            const video = document.getElementById('videoPlayer');
+            const volIcon = document.getElementById('volIcon');
+            const slider = document.getElementById('volumeSlider');
+
+            isMuted = !isMuted;
+
+            if (video) {
+                video.muted = isMuted;
+            }
+
+            if (isMuted) {
+                // Save current volume before muting
+                if (slider) slider.value = 0;
+                if (volIcon) volIcon.textContent = '🔇';
+                onVolumeChange(0);
+            } else {
+                // Restore to 30% if was muted
+                if (slider) slider.value = 30;
+                if (volIcon) volIcon.textContent = '🔉';
+                onVolumeChange(30);
+            }
+        }
+
+        function applyDefaultVolume() {
+            const video = document.getElementById('videoPlayer');
+            const slider = document.getElementById('volumeSlider');
+            const volIcon = document.getElementById('volIcon');
+
+            if (video) {
+                video.volume = 0.3;
+                video.muted = false;
+            }
+            if (slider) {
+                slider.value = 30;
+                slider.style.background = 'linear-gradient(to right, #e94560 0%, #e94560 30%, #444 30%, #444 100%)';
+            }
+            if (volIcon) {
+                volIcon.textContent = '🔉';
+            }
+            isMuted = false;
+            currentVolume = 0.3;
+        }
+        // ==============================
+
+        async function initPeer() {
+            updateStatus('Creando conexión...', 'connecting');
+
+            dummyStream = await createDummyStream();
+
+            try {
+                peer = new Peer(PEER_CONFIG);
+
+                peer.on('open', (id) => {
+                    setPeerId(id);
+                    updateStatus('Buscando broadcaster...', 'connecting');
+                    setTimeout(connectToBroadcaster, 1000);
+                });
+
+                peer.on('error', (err) => {
+                    updateStatus(`Error: ${err.type}`, 'error');
+
+                    if (err.type === 'peer-unavailable') {
+                        updateStatus('Mesa no disponible, reintentando...', 'connecting');
+                        scheduleReconnect();
+                    } else if (err.type === 'network') {
+                        setTimeout(() => peer.reconnect(), 2000);
+                    }
+                });
+
+                peer.on('disconnected', () => {
+                    updateStatus('Reconectando...', 'connecting');
+                    setTimeout(() => {
+                        if (peer && !peer.destroyed) peer.reconnect();
+                    }, 2000);
+                });
+
+            } catch (err) {
+                updateStatus('Error de inicio', 'error');
+            }
+        }
+
+        function connectToBroadcaster() {
+            if (isConnected || !peer || peer.disconnected || !dummyStream) return;
+
+            updateStatus('Conectando a mesa...', 'connecting');
+
+            try {
+                const call = peer.call(BROADCASTER_ID, dummyStream);
+                if (!call) {
+                    scheduleReconnect();
+                    return;
+                }
+
+                currentCall = call;
+
+                const timeout = setTimeout(() => {
+                    if (!isConnected) {
+                        call.close();
+                        scheduleReconnect();
+                    }
+                }, 15000);
+
+                call.on('stream', (remoteStream) => {
+                    clearTimeout(timeout);
+                    handleStreamReceived(remoteStream);
+                });
+
+                call.on('close', () => {
+                    clearTimeout(timeout);
+                    handleDisconnect();
+                });
+
+                call.on('error', () => {
+                    clearTimeout(timeout);
+                    handleDisconnect();
+                });
+
+            } catch (err) {
+                scheduleReconnect();
+            }
+        }
+
+        function handleStreamReceived(remoteStream) {
+            isConnected = true;
+            reconnectAttempts = 0;
+
+            const video = document.getElementById('videoPlayer');
+            const videoFrame = document.getElementById('videoFrame');
+
+            video.srcObject = remoteStream;
+
+            // Apply default volume (30%) and unmute
+            applyDefaultVolume();
+
+            video.onloadedmetadata = () => {
+                const resStat = document.getElementById('resStat');
+                if (resStat) resStat.textContent = `${video.videoWidth}x${video.videoHeight}`;
+
+                video.play().then(() => {
+                    document.getElementById('waitingMessage').classList.add('hidden');
+                    videoFrame.classList.remove('hidden');
+                    updateStatus('✓ Conectado', 'connected');
+                    showControls();
+                }).catch(() => {
+                    document.getElementById('waitingText').innerHTML = 
+                        'Haz clic para iniciar<br><button onclick="forcePlay()" style="margin-top:10px;padding:10px 20px;background:#e94560;border:none;color:white;border-radius:5px;cursor:pointer;">▶️ INICIAR</button>';
+                });
+            };
+        }
+
+        function forcePlay() {
+            const video = document.getElementById('videoPlayer');
+            video.play().then(() => {
+                document.getElementById('waitingMessage').classList.add('hidden');
+                document.getElementById('videoFrame').classList.remove('hidden');
+                updateStatus('✓ Conectado', 'connected');
+                showControls();
+            });
+        }
+
+        function handleDisconnect() {
+            if (!isConnected) return;
+            isConnected = false;
+
+            const video = document.getElementById('videoPlayer');
+            const videoFrame = document.getElementById('videoFrame');
+
+            video.pause();
+            video.srcObject = null;
+            videoFrame.classList.add('hidden');
+
+            clearTimeout(hideTimeout);
+            const fsBtn = document.getElementById('fullscreenBtn');
+            const volCtrl = document.getElementById('volumeControl');
+            if (fsBtn) fsBtn.classList.remove('hidden-auto');
+            if (volCtrl) volCtrl.classList.remove('hidden-auto');
+
+            document.getElementById('waitingMessage').classList.remove('hidden');
+            updateStatus('Desconectado', 'error');
+
+            if (currentCall) {
+                try { currentCall.close(); } catch(e) {}
+                currentCall = null;
+            }
+
+            scheduleReconnect();
+        }
+
+        function scheduleReconnect() {
+            reconnectAttempts++;
+            const delay = Math.min(3000 * reconnectAttempts, 10000);
+            updateStatus(`Reintentando en ${delay/1000}s...`, 'connecting');
+
+            setTimeout(() => {
+                if (!isConnected) connectToBroadcaster();
+            }, delay);
+        }
+
+        function manualReconnect() {
+            reconnectAttempts = 0;
+            if (currentCall) {
+                currentCall.close();
+                currentCall = null;
+            }
+            updateStatus('Reconectando manualmente...', 'connecting');
+            setTimeout(connectToBroadcaster, 500);
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyM') {
+                e.preventDefault();
+                toggleMute();
+            }
+        });
+
+        function setupAutoHideEvents() {
+            const events = ['mousemove', 'mousedown', 'touchstart', 'keydown', 'wheel'];
+
+            events.forEach(event => {
+                document.addEventListener(event, resetAutoHideTimer, { passive: true });
+            });
+        }
+
+        window.addEventListener('load', () => {
+            initPeer();
+            setupAutoHideEvents();
+        });
+
+        document.addEventListener('click', () => {
+            const video = document.getElementById('videoPlayer');
+            if (video.paused && video.srcObject) {
+                video.play().catch(() => {});
+            }
+        }, { once: true });
+    </script>
+</body>
+</html>
