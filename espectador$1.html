@@ -35,7 +35,12 @@
         }
         .header h1 { color: #e94560; font-size: 1.5em; }
         
-        /* BOTÓN RECONECTAR VISIBLE EN EL HEADER */
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
         .btn-reconnect {
             background: #3498db;
             color: #fff;
@@ -79,12 +84,64 @@
             align-items: center;
             justify-content: center;
         }
-        #videoPlayer {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: #000;
+        
+        .video-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 4px solid #e94560;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.5), 
+                        inset 0 0 30px rgba(233, 69, 96, 0.1);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            z-index: 50;
+            max-width: 90vw;
+            max-height: 85vh;
+            width: auto;
+            height: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+
+        .video-frame video {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            display: block;
+        }
+
+        .fullscreen-btn {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            z-index: 60;
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .fullscreen-btn:hover {
+            background: rgba(233, 69, 96, 0.8);
+            border-color: #e94560;
+            transform: scale(1.1);
+        }
+        
+        .fullscreen-btn.hidden-auto {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         .waiting-message {
             position: absolute;
             top: 50%;
@@ -101,7 +158,6 @@
         }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
-        /* PANEL OCULTO - Mantiene funcionalidad en JS */
         .connection-panel {
             position: absolute;
             top: 20px;
@@ -118,7 +174,6 @@
             pointer-events: none !important;
         }
         
-        /* STATS OCULTO */
         .stats-overlay {
             position: absolute;
             bottom: 80px;
@@ -134,48 +189,35 @@
             pointer-events: none !important;
         }
         
-        .fullscreen-btn {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: #fff;
-            padding: 15px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 1.2em;
-            transition: all 0.3s;
-        }
-        .fullscreen-btn:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
-        
         .hidden { display: none !important; }
     </style>
+<base target="_blank">
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div class="header-left">
-                <!-- BOTÓN RECONECTAR VISIBLE -->
+                <h1>🏆 MESA 1 - Transmisión</h1>
+            </div>
+            <div class="header-right">
                 <button class="btn-reconnect" onclick="manualReconnect()" title="Reconectar transmisión">
                     🔄 Reconectar
                 </button>
-                <h1>🏆 MESA 1 - Transmisión</h1>
+                <div class="live-badge" id="liveBadge">EN VIVO</div>
             </div>
-            <div class="live-badge" id="liveBadge">EN VIVO</div>
         </div>
 
         <div class="video-container">
-            <!-- Mensaje de espera -->
             <div class="waiting-message" id="waitingMessage">
                 <div class="icon">📡</div>
                 <div id="waitingText">Conectando a la transmisión...</div>
             </div>
 
-            <!-- Video (inicia silenciado) -->
-            <video id="videoPlayer" autoplay playsinline muted class="hidden"></video>
+            <div class="video-frame hidden" id="videoFrame">
+                <video id="videoPlayer" autoplay playsinline muted></video>
+                <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
+            </div>
 
-            <!-- PANEL OCULTO - Mantiene funcionalidad -->
             <div class="connection-panel" id="connectionPanel">
                 <div class="status-row">
                     <div class="status-dot" id="statusDot"></div>
@@ -189,19 +231,13 @@
                 </div>
             </div>
 
-            <!-- STATS OCULTO -->
             <div class="stats-overlay" id="statsOverlay">
                 <div>Resolución: <span id="resStat">-</span></div>
             </div>
-
-            <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶</button>
         </div>
     </div>
 
     <script>
-        // ============================================
-        // CONFIGURACIÓN
-        // ============================================
         const BROADCASTER_ID = 'mesa1-broadcaster-001';
         const PEER_CONFIG = {
             host: '0.peerjs.com',
@@ -216,20 +252,35 @@
             }
         };
 
-        // ============================================
-        // VARIABLES
-        // ============================================
         let peer = null;
         let currentCall = null;
         let reconnectAttempts = 0;
         let isConnected = false;
         let dummyStream = null;
-        // SONIDO INICIA SILENCIADO (true = silenciado)
         let isMuted = true;
+        let hideTimeout = null;
+        const AUTO_HIDE_DELAY = 10000;
 
-        // ============================================
-        // ACTUALIZAR ESTADO (funciona en segundo plano)
-        // ============================================
+        function showFullscreenBtn() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (btn) {
+                btn.classList.remove('hidden-auto');
+            }
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(hideFullscreenBtn, AUTO_HIDE_DELAY);
+        }
+        
+        function hideFullscreenBtn() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (btn && isConnected) {
+                btn.classList.add('hidden-auto');
+            }
+        }
+        
+        function resetAutoHideTimer() {
+            showFullscreenBtn();
+        }
+
         function updateStatus(text, state = 'connecting') {
             console.log(`[${state.toUpperCase()}] ${text}`);
             
@@ -249,9 +300,6 @@
             if (peerIdEl) peerIdEl.textContent = `ID: ${id.substring(0, 12)}...`;
         }
 
-        // ============================================
-        // STREAM DUMMY
-        // ============================================
         async function createDummyStream() {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -281,9 +329,6 @@
             }
         }
 
-        // ============================================
-        // INICIALIZACIÓN
-        // ============================================
         async function initPeer() {
             updateStatus('Creando conexión...', 'connecting');
             
@@ -321,9 +366,6 @@
             }
         }
 
-        // ============================================
-        // CONEXIÓN AL BROADCASTER
-        // ============================================
         function connectToBroadcaster() {
             if (isConnected || !peer || peer.disconnected || !dummyStream) return;
 
@@ -370,9 +412,9 @@
             reconnectAttempts = 0;
             
             const video = document.getElementById('videoPlayer');
-            video.srcObject = remoteStream;
+            const videoFrame = document.getElementById('videoFrame');
             
-            // MANTENER SILENCIADO según configuración inicial
+            video.srcObject = remoteStream;
             video.muted = isMuted;
             
             video.onloadedmetadata = () => {
@@ -381,8 +423,9 @@
                 
                 video.play().then(() => {
                     document.getElementById('waitingMessage').classList.add('hidden');
-                    video.classList.remove('hidden');
+                    videoFrame.classList.remove('hidden');
                     updateStatus('✓ Conectado', 'connected');
+                    showFullscreenBtn();
                 }).catch(() => {
                     document.getElementById('waitingText').innerHTML = 
                         'Haz clic para iniciar<br><button onclick="forcePlay()" style="margin-top:10px;padding:10px 20px;background:#e94560;border:none;color:white;border-radius:5px;cursor:pointer;">▶️ INICIAR</button>';
@@ -394,7 +437,9 @@
             const video = document.getElementById('videoPlayer');
             video.play().then(() => {
                 document.getElementById('waitingMessage').classList.add('hidden');
+                document.getElementById('videoFrame').classList.remove('hidden');
                 updateStatus('✓ Conectado', 'connected');
+                showFullscreenBtn();
             });
         }
 
@@ -403,9 +448,15 @@
             isConnected = false;
             
             const video = document.getElementById('videoPlayer');
+            const videoFrame = document.getElementById('videoFrame');
+            
             video.pause();
             video.srcObject = null;
-            video.classList.add('hidden');
+            videoFrame.classList.add('hidden');
+            
+            clearTimeout(hideTimeout);
+            const btn = document.getElementById('fullscreenBtn');
+            if (btn) btn.classList.remove('hidden-auto');
             
             document.getElementById('waitingMessage').classList.remove('hidden');
             updateStatus('Desconectado', 'error');
@@ -428,9 +479,6 @@
             }, delay);
         }
 
-        // ============================================
-        // BOTÓN RECONECTAR VISIBLE - FUNCIONALIDAD
-        // ============================================
         function manualReconnect() {
             reconnectAttempts = 0;
             if (currentCall) {
@@ -441,9 +489,6 @@
             setTimeout(connectToBroadcaster, 500);
         }
 
-        // ============================================
-        // TOGGLE MUTE - Inicia silenciado
-        // ============================================
         function toggleMute() {
             const video = document.getElementById('videoPlayer');
             isMuted = !isMuted;
@@ -455,9 +500,6 @@
             console.log(isMuted ? '🔇 Silenciado' : '🔊 Sonido activado');
         }
 
-        // ============================================
-        // PANTALLA COMPLETA
-        // ============================================
         function toggleFullscreen() {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen();
@@ -466,9 +508,6 @@
             }
         }
 
-        // ============================================
-        // ATAJO DE TECLADO PARA MUTE (M)
-        // ============================================
         document.addEventListener('keydown', (e) => {
             if (e.code === 'KeyM') {
                 e.preventDefault();
@@ -476,12 +515,19 @@
             }
         });
 
-        // ============================================
-        // INICIO
-        // ============================================
-        window.addEventListener('load', initPeer);
+        function setupAutoHideEvents() {
+            const events = ['mousemove', 'mousedown', 'touchstart', 'keydown', 'wheel'];
+            
+            events.forEach(event => {
+                document.addEventListener(event, resetAutoHideTimer, { passive: true });
+            });
+        }
+
+        window.addEventListener('load', () => {
+            initPeer();
+            setupAutoHideEvents();
+        });
         
-        // Click para desbloquear audio (pero mantiene silenciado hasta que presionen M)
         document.addEventListener('click', () => {
             const video = document.getElementById('videoPlayer');
             if (video.paused && video.srcObject) {
