@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>🔴 Transmisión Mesa 1 - Viewer</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
@@ -27,6 +27,7 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 3px solid #e94560;
+            flex-shrink: 0;
         }
         .header-left {
             display: flex;
@@ -34,13 +35,13 @@
             gap: 15px;
         }
         .header h1 { color: #e94560; font-size: 1.5em; }
-        
+
         .header-right {
             display: flex;
             align-items: center;
             gap: 15px;
         }
-        
+
         .btn-reconnect {
             background: #3498db;
             color: #fff;
@@ -62,7 +63,7 @@
         .btn-reconnect:active {
             transform: scale(0.95);
         }
-        
+
         .live-badge {
             background: #e74c3c;
             color: #fff;
@@ -83,13 +84,11 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
         }
-        
+
         .video-frame {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            position: relative;
             border: 4px solid #e94560;
             border-radius: 12px;
             box-shadow: 0 0 30px rgba(233, 69, 96, 0.5), 
@@ -97,20 +96,100 @@
             background: rgba(0, 0, 0, 0.3);
             padding: 8px;
             z-index: 50;
-            max-width: 90vw;
-            max-height: 85vh;
-            width: auto;
-            height: auto;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: width 0.3s ease, height 0.3s ease;
         }
 
         .video-frame video {
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
             border-radius: 8px;
             display: block;
+        }
+
+        /* ============ RESPONSIVE SIZES ============ */
+
+        /* Mobile (celulares) */
+        @media (max-width: 767px) {
+            .header {
+                padding: 10px 15px;
+            }
+            .header h1 {
+                font-size: 1em;
+            }
+            .btn-reconnect {
+                padding: 6px 12px;
+                font-size: 0.75em;
+            }
+            .live-badge {
+                padding: 4px 10px;
+                font-size: 0.7em;
+            }
+            .video-frame {
+                width: 100vw;
+                height: 56.25vw; /* 16:9 */
+                max-width: 100%;
+                max-height: calc(100vh - 60px);
+                border-width: 2px;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            .fullscreen-btn {
+                padding: 8px;
+                font-size: 1em;
+            }
+        }
+
+        /* Tablet */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .header {
+                padding: 12px 20px;
+            }
+            .header h1 {
+                font-size: 1.2em;
+            }
+            .video-frame {
+                width: 90vw;
+                height: 50.625vw; /* 16:9 */
+                max-width: 900px;
+                max-height: calc(100vh - 80px);
+                border-width: 3px;
+            }
+        }
+
+        /* Desktop / Computador */
+        @media (min-width: 1025px) {
+            .video-frame {
+                width: 80vw;
+                height: 45vw; /* 16:9 */
+                max-width: 1200px;
+                max-height: calc(100vh - 80px);
+            }
+        }
+
+        /* Landscape mobile */
+        @media (max-width: 767px) and (orientation: landscape) {
+            .video-frame {
+                width: auto;
+                height: calc(100vh - 60px);
+                aspect-ratio: 16/9;
+            }
+            .header h1 {
+                font-size: 0.9em;
+            }
+        }
+
+        /* Landscape tablet */
+        @media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+            .video-frame {
+                width: auto;
+                height: calc(100vh - 80px);
+                aspect-ratio: 16/9;
+                max-width: 90vw;
+            }
         }
 
         .fullscreen-btn {
@@ -129,13 +208,13 @@
             opacity: 1;
             visibility: visible;
         }
-        
+
         .fullscreen-btn:hover {
             background: rgba(233, 69, 96, 0.8);
             border-color: #e94560;
             transform: scale(1.1);
         }
-        
+
         .fullscreen-btn.hidden-auto {
             opacity: 0;
             visibility: hidden;
@@ -157,7 +236,7 @@
             animation: spin 2s linear infinite;
         }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
+
         .connection-panel {
             position: absolute;
             top: 20px;
@@ -173,7 +252,7 @@
             opacity: 0 !important;
             pointer-events: none !important;
         }
-        
+
         .stats-overlay {
             position: absolute;
             bottom: 80px;
@@ -188,9 +267,10 @@
             opacity: 0 !important;
             pointer-events: none !important;
         }
-        
+
         .hidden { display: none !important; }
     </style>
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -269,26 +349,26 @@
             clearTimeout(hideTimeout);
             hideTimeout = setTimeout(hideFullscreenBtn, AUTO_HIDE_DELAY);
         }
-        
+
         function hideFullscreenBtn() {
             const btn = document.getElementById('fullscreenBtn');
             if (btn && isConnected) {
                 btn.classList.add('hidden-auto');
             }
         }
-        
+
         function resetAutoHideTimer() {
             showFullscreenBtn();
         }
 
         function updateStatus(text, state = 'connecting') {
             console.log(`[${state.toUpperCase()}] ${text}`);
-            
+
             const statusText = document.getElementById('statusText');
             const currentStatus = document.getElementById('currentStatus');
             const statusDot = document.getElementById('statusDot');
             const waitingText = document.getElementById('waitingText');
-            
+
             if (statusText) statusText.textContent = text;
             if (currentStatus) currentStatus.textContent = text;
             if (statusDot) statusDot.className = 'status-dot ' + state;
@@ -308,16 +388,16 @@
                 osc.frequency.value = 0;
                 osc.connect(dest);
                 osc.start();
-                
+
                 const canvas = document.createElement('canvas');
                 canvas.width = 2;
                 canvas.height = 2;
                 const ctx = canvas.getContext('2d');
                 ctx.fillStyle = 'black';
                 ctx.fillRect(0, 0, 2, 2);
-                
+
                 const videoStream = canvas.captureStream(1);
-                
+
                 return new MediaStream([
                     ...videoStream.getVideoTracks(),
                     ...dest.stream.getAudioTracks()
@@ -331,7 +411,7 @@
 
         async function initPeer() {
             updateStatus('Creando conexión...', 'connecting');
-            
+
             dummyStream = await createDummyStream();
 
             try {
@@ -345,7 +425,7 @@
 
                 peer.on('error', (err) => {
                     updateStatus(`Error: ${err.type}`, 'error');
-                    
+
                     if (err.type === 'peer-unavailable') {
                         updateStatus('Mesa no disponible, reintentando...', 'connecting');
                         scheduleReconnect();
@@ -410,17 +490,17 @@
         function handleStreamReceived(remoteStream) {
             isConnected = true;
             reconnectAttempts = 0;
-            
+
             const video = document.getElementById('videoPlayer');
             const videoFrame = document.getElementById('videoFrame');
-            
+
             video.srcObject = remoteStream;
             video.muted = isMuted;
-            
+
             video.onloadedmetadata = () => {
                 const resStat = document.getElementById('resStat');
                 if (resStat) resStat.textContent = `${video.videoWidth}x${video.videoHeight}`;
-                
+
                 video.play().then(() => {
                     document.getElementById('waitingMessage').classList.add('hidden');
                     videoFrame.classList.remove('hidden');
@@ -446,26 +526,26 @@
         function handleDisconnect() {
             if (!isConnected) return;
             isConnected = false;
-            
+
             const video = document.getElementById('videoPlayer');
             const videoFrame = document.getElementById('videoFrame');
-            
+
             video.pause();
             video.srcObject = null;
             videoFrame.classList.add('hidden');
-            
+
             clearTimeout(hideTimeout);
             const btn = document.getElementById('fullscreenBtn');
             if (btn) btn.classList.remove('hidden-auto');
-            
+
             document.getElementById('waitingMessage').classList.remove('hidden');
             updateStatus('Desconectado', 'error');
-            
+
             if (currentCall) {
                 try { currentCall.close(); } catch(e) {}
                 currentCall = null;
             }
-            
+
             scheduleReconnect();
         }
 
@@ -473,7 +553,7 @@
             reconnectAttempts++;
             const delay = Math.min(3000 * reconnectAttempts, 10000);
             updateStatus(`Reintentando en ${delay/1000}s...`, 'connecting');
-            
+
             setTimeout(() => {
                 if (!isConnected) connectToBroadcaster();
             }, delay);
@@ -493,10 +573,10 @@
             const video = document.getElementById('videoPlayer');
             isMuted = !isMuted;
             video.muted = isMuted;
-            
+
             const muteBtn = document.getElementById('muteBtn');
             if (muteBtn) muteBtn.textContent = isMuted ? '🔇 Silenciado' : '🔊 Sonido';
-            
+
             console.log(isMuted ? '🔇 Silenciado' : '🔊 Sonido activado');
         }
 
@@ -517,7 +597,7 @@
 
         function setupAutoHideEvents() {
             const events = ['mousemove', 'mousedown', 'touchstart', 'keydown', 'wheel'];
-            
+
             events.forEach(event => {
                 document.addEventListener(event, resetAutoHideTimer, { passive: true });
             });
@@ -527,7 +607,7 @@
             initPeer();
             setupAutoHideEvents();
         });
-        
+
         document.addEventListener('click', () => {
             const video = document.getElementById('videoPlayer');
             if (video.paused && video.srcObject) {
