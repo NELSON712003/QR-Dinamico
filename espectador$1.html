@@ -130,7 +130,7 @@
             }
             .video-frame {
                 width: 100vw;
-                height: 56.25vw; /* 16:9 */
+                height: 56.25vw;
                 max-width: 100%;
                 max-height: calc(100vh - 60px);
                 border-width: 2px;
@@ -140,6 +140,18 @@
             .fullscreen-btn {
                 padding: 8px;
                 font-size: 1em;
+            }
+            .volume-control {
+                bottom: 10px;
+                left: 10px;
+                padding: 8px 12px;
+                gap: 8px;
+            }
+            .volume-control input[type="range"] {
+                width: 80px;
+            }
+            .volume-control .vol-label {
+                font-size: 0.7em;
             }
         }
 
@@ -153,7 +165,7 @@
             }
             .video-frame {
                 width: 90vw;
-                height: 50.625vw; /* 16:9 */
+                height: 50.625vw;
                 max-width: 900px;
                 max-height: calc(100vh - 80px);
                 border-width: 3px;
@@ -164,7 +176,7 @@
         @media (min-width: 1025px) {
             .video-frame {
                 width: 80vw;
-                height: 45vw; /* 16:9 */
+                height: 45vw;
                 max-width: 1200px;
                 max-height: calc(100vh - 80px);
             }
@@ -216,6 +228,75 @@
         }
 
         .fullscreen-btn.hidden-auto {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* Volume Control */
+        .volume-control {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 60;
+            transition: all 0.3s ease;
+        }
+
+        .volume-control .vol-icon {
+            font-size: 1.2em;
+            cursor: pointer;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .volume-control input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 120px;
+            height: 6px;
+            background: linear-gradient(to right, #e94560 0%, #e94560 30%, #444 30%, #444 100%);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .volume-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #e94560;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(233, 69, 96, 0.5);
+        }
+
+        .volume-control input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #e94560;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(233, 69, 96, 0.5);
+        }
+
+        .volume-control .vol-label {
+            font-size: 0.75em;
+            color: #aaa;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .volume-control.hidden-auto {
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
@@ -295,6 +376,13 @@
 
             <div class="video-frame hidden" id="videoFrame">
                 <video id="videoPlayer" autoplay playsinline muted></video>
+
+                <div class="volume-control" id="volumeControl">
+                    <span class="vol-icon" id="volIcon" onclick="toggleMute()">🔇</span>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="30" oninput="onVolumeChange(this.value)">
+                    <span class="vol-label" id="volLabel">30%</span>
+                </div>
+
                 <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
             </div>
 
@@ -338,27 +426,28 @@
         let isConnected = false;
         let dummyStream = null;
         let isMuted = true;
+        let currentVolume = 0.3; // 30% por defecto
         let hideTimeout = null;
         const AUTO_HIDE_DELAY = 10000;
 
-        function showFullscreenBtn() {
-            const btn = document.getElementById('fullscreenBtn');
-            if (btn) {
-                btn.classList.remove('hidden-auto');
-            }
+        function showControls() {
+            const fsBtn = document.getElementById('fullscreenBtn');
+            const volCtrl = document.getElementById('volumeControl');
+            if (fsBtn) fsBtn.classList.remove('hidden-auto');
+            if (volCtrl) volCtrl.classList.remove('hidden-auto');
             clearTimeout(hideTimeout);
-            hideTimeout = setTimeout(hideFullscreenBtn, AUTO_HIDE_DELAY);
+            hideTimeout = setTimeout(hideControls, AUTO_HIDE_DELAY);
         }
 
-        function hideFullscreenBtn() {
-            const btn = document.getElementById('fullscreenBtn');
-            if (btn && isConnected) {
-                btn.classList.add('hidden-auto');
-            }
+        function hideControls() {
+            const fsBtn = document.getElementById('fullscreenBtn');
+            const volCtrl = document.getElementById('volumeControl');
+            if (fsBtn && isConnected) fsBtn.classList.add('hidden-auto');
+            if (volCtrl && isConnected) volCtrl.classList.add('hidden-auto');
         }
 
         function resetAutoHideTimer() {
-            showFullscreenBtn();
+            showControls();
         }
 
         function updateStatus(text, state = 'connecting') {
@@ -408,6 +497,97 @@
                 return s;
             }
         }
+
+        // ====== VOLUME FUNCTIONS ======
+        function onVolumeChange(value) {
+            currentVolume = value / 100;
+            const video = document.getElementById('videoPlayer');
+            const volLabel = document.getElementById('volLabel');
+            const volIcon = document.getElementById('volIcon');
+            const slider = document.getElementById('volumeSlider');
+
+            if (video) {
+                video.volume = currentVolume;
+            }
+            if (volLabel) {
+                volLabel.textContent = value + '%';
+            }
+
+            // Update slider background to show 30% mark
+            if (slider) {
+                const percent = value;
+                slider.style.background = `linear-gradient(to right, #e94560 0%, #e94560 ${percent}%, #444 ${percent}%, #444 100%)`;
+            }
+
+            // Update icon
+            if (volIcon) {
+                if (value == 0) {
+                    volIcon.textContent = '🔇';
+                    isMuted = true;
+                } else if (value < 30) {
+                    volIcon.textContent = '🔈';
+                    isMuted = false;
+                } else if (value < 70) {
+                    volIcon.textContent = '🔉';
+                    isMuted = false;
+                } else {
+                    volIcon.textContent = '🔊';
+                    isMuted = false;
+                }
+            }
+
+            // Unmute if volume > 0
+            if (video && value > 0) {
+                video.muted = false;
+            } else if (video && value == 0) {
+                video.muted = true;
+            }
+        }
+
+        function toggleMute() {
+            const video = document.getElementById('videoPlayer');
+            const volIcon = document.getElementById('volIcon');
+            const slider = document.getElementById('volumeSlider');
+
+            isMuted = !isMuted;
+
+            if (video) {
+                video.muted = isMuted;
+            }
+
+            if (isMuted) {
+                // Save current volume before muting
+                if (slider) slider.value = 0;
+                if (volIcon) volIcon.textContent = '🔇';
+                onVolumeChange(0);
+            } else {
+                // Restore to 30% if was muted
+                if (slider) slider.value = 30;
+                if (volIcon) volIcon.textContent = '🔉';
+                onVolumeChange(30);
+            }
+        }
+
+        function applyDefaultVolume() {
+            const video = document.getElementById('videoPlayer');
+            const slider = document.getElementById('volumeSlider');
+            const volIcon = document.getElementById('volIcon');
+
+            if (video) {
+                video.volume = 0.3;
+                video.muted = false;
+            }
+            if (slider) {
+                slider.value = 30;
+                slider.style.background = 'linear-gradient(to right, #e94560 0%, #e94560 30%, #444 30%, #444 100%)';
+            }
+            if (volIcon) {
+                volIcon.textContent = '🔉';
+            }
+            isMuted = false;
+            currentVolume = 0.3;
+        }
+        // ==============================
 
         async function initPeer() {
             updateStatus('Creando conexión...', 'connecting');
@@ -495,7 +675,9 @@
             const videoFrame = document.getElementById('videoFrame');
 
             video.srcObject = remoteStream;
-            video.muted = isMuted;
+
+            // Apply default volume (30%) and unmute
+            applyDefaultVolume();
 
             video.onloadedmetadata = () => {
                 const resStat = document.getElementById('resStat');
@@ -505,7 +687,7 @@
                     document.getElementById('waitingMessage').classList.add('hidden');
                     videoFrame.classList.remove('hidden');
                     updateStatus('✓ Conectado', 'connected');
-                    showFullscreenBtn();
+                    showControls();
                 }).catch(() => {
                     document.getElementById('waitingText').innerHTML = 
                         'Haz clic para iniciar<br><button onclick="forcePlay()" style="margin-top:10px;padding:10px 20px;background:#e94560;border:none;color:white;border-radius:5px;cursor:pointer;">▶️ INICIAR</button>';
@@ -519,7 +701,7 @@
                 document.getElementById('waitingMessage').classList.add('hidden');
                 document.getElementById('videoFrame').classList.remove('hidden');
                 updateStatus('✓ Conectado', 'connected');
-                showFullscreenBtn();
+                showControls();
             });
         }
 
@@ -535,8 +717,10 @@
             videoFrame.classList.add('hidden');
 
             clearTimeout(hideTimeout);
-            const btn = document.getElementById('fullscreenBtn');
-            if (btn) btn.classList.remove('hidden-auto');
+            const fsBtn = document.getElementById('fullscreenBtn');
+            const volCtrl = document.getElementById('volumeControl');
+            if (fsBtn) fsBtn.classList.remove('hidden-auto');
+            if (volCtrl) volCtrl.classList.remove('hidden-auto');
 
             document.getElementById('waitingMessage').classList.remove('hidden');
             updateStatus('Desconectado', 'error');
@@ -567,17 +751,6 @@
             }
             updateStatus('Reconectando manualmente...', 'connecting');
             setTimeout(connectToBroadcaster, 500);
-        }
-
-        function toggleMute() {
-            const video = document.getElementById('videoPlayer');
-            isMuted = !isMuted;
-            video.muted = isMuted;
-
-            const muteBtn = document.getElementById('muteBtn');
-            if (muteBtn) muteBtn.textContent = isMuted ? '🔇 Silenciado' : '🔊 Sonido';
-
-            console.log(isMuted ? '🔇 Silenciado' : '🔊 Sonido activado');
         }
 
         function toggleFullscreen() {
