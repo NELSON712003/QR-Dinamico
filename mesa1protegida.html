@@ -1029,51 +1029,49 @@
             return Math.abs(hash).toString(36);
         }
 
-        // Verificar si es la primera vez que se abre
-        function isFirstOpen() {
+        // Verificar si viene con token válido en URL
+        function validateUrlToken() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlToken = urlParams.get('access_token');
             const urlHash = urlParams.get('auth_key');
 
-            // Si viene con token en URL, es el enlace original
             if (urlToken && urlHash) {
-                // Validar que el hash coincida
                 if (hashToken(urlToken) === urlHash) {
-                    // Guardar en sessionStorage para mantener sesión
+                    // Token válido - guardar en sessionStorage
                     sessionStorage.setItem('mesa1_access_token', urlToken);
                     sessionStorage.setItem('mesa1_auth_verified', 'true');
                     sessionStorage.setItem('mesa1_open_time', Date.now().toString());
 
-                    // Limpiar URL para que no se pueda copiar el enlace con token
+                    // Limpiar URL para que no se pueda copiar
                     if (window.history.replaceState) {
                         window.history.replaceState({}, document.title, window.location.pathname);
                     }
                     return true;
                 }
             }
+            return false;
+        }
 
-            // Si no viene con token en URL, verificar sessionStorage
+        // Verificar si hay sesión activa en sessionStorage
+        function hasActiveSession() {
             const storedToken = sessionStorage.getItem('mesa1_access_token');
             const verified = sessionStorage.getItem('mesa1_auth_verified');
             const openTime = sessionStorage.getItem('mesa1_open_time');
 
             if (storedToken && verified === 'true' && openTime) {
-                // Verificar que no haya pasado mucho tiempo (máximo 8 horas de inactividad)
                 const timeElapsed = Date.now() - parseInt(openTime);
                 const maxTime = 8 * 60 * 60 * 1000; // 8 horas
 
                 if (timeElapsed < maxTime) {
-                    // Actualizar tiempo de actividad
                     sessionStorage.setItem('mesa1_open_time', Date.now().toString());
                     return true;
                 }
             }
-
             return false;
         }
 
-        // Bloquear acceso no autorizado
-        function blockAccess() {
+        // Mostrar pantalla de acceso bloqueado
+        function showBlockedScreen() {
             document.body.innerHTML = `
                 <div style="
                     position: fixed;
@@ -1102,7 +1100,6 @@
             `;
             document.body.style.overflow = 'hidden';
 
-            // Prevenir cualquier interacción
             document.addEventListener('contextmenu', e => e.preventDefault());
             document.addEventListener('keydown', e => {
                 if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
@@ -1111,30 +1108,103 @@
             });
         }
 
-        // Verificar acceso inmediatamente
-        if (!isFirstOpen()) {
-            blockAccess();
-            throw new Error('ACCESO_NO_AUTORIZADO');
+        // Mostrar generador de enlace para el dueño
+        function showLinkGenerator() {
+            const token = generateUniqueToken();
+            const hash = hashToken(token);
+            const baseUrl = window.location.origin + window.location.pathname;
+            const uniqueLink = `${baseUrl}?access_token=${token}&auth_key=${hash}`;
+
+            document.body.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 0; left: 0; width: 100%; height: 100%;
+                    background: #0a0a1a;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: 'Segoe UI', sans-serif;
+                    z-index: 99999;
+                    padding: 20px;
+                ">
+                    <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 600px; width: 100%; text-align: center;">
+                        <div style="font-size: 4em; margin-bottom: 20px;">🔗</div>
+                        <h2 style="color: #e94560; margin-bottom: 20px; font-size: 1.8em;">Bienvenido, Dueño</h2>
+                        <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
+                            Esta es la <strong style="color: #fff;">PRIMERA VEZ</strong> que abres esta página.<br>
+                            Genera tu enlace único ahora. Este enlace solo funcionará en este navegador.
+                        </p>
+
+                        <div style="background: #0a0a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; word-break: break-all; border: 2px solid #0f3460;">
+                            <code id="uniqueLink" style="color: #2ecc71; font-size: 0.85em;">${uniqueLink}</code>
+                        </div>
+
+                        <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+                            <button onclick="copyAndOpenLink()" style="padding: 15px 30px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold; transition: all 0.3s;">
+                                📋 Copiar y Abrir
+                            </button>
+                            <button onclick="openLinkDirect()" style="padding: 15px 30px; background: #27ae60; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold; transition: all 0.3s;">
+                                🚀 Abrir Directamente
+                            </button>
+                        </div>
+
+                        <div style="background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                            <p style="color: #e74c3c; font-size: 0.9em; margin: 0; line-height: 1.5;">
+                                ⚠️ <strong>IMPORTANTE:</strong><br>
+                                • Este enlace es ÚNICO e IRREPETIBLE<br>
+                                • Solo funciona en este navegador específico<br>
+                                • Si borras datos de navegación, perderás acceso<br>
+                                • No funciona en modo incógnito
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.style.overflow = 'hidden';
+
+            // Guardar el enlace generado para las funciones
+            window._generatedLink = uniqueLink;
         }
 
-        // Protección adicional: detectar si se intenta copiar el enlace
-        document.addEventListener('copy', function(e) {
-            const selection = window.getSelection().toString();
-            if (selection.includes(window.location.href)) {
-                e.preventDefault();
-                alert('⚠️ No puedes copiar el enlace de esta página.');
+        // Funciones globales para los botones del generador
+        window.copyAndOpenLink = function() {
+            if (window._generatedLink) {
+                navigator.clipboard.writeText(window._generatedLink).then(() => {
+                    alert('✅ Enlace copiado. Ahora se abrirá la página...');
+                    window.location.href = window._generatedLink;
+                });
             }
-        });
+        };
 
-        // Protección contra inspección
-        setInterval(() => {
-            const start = performance.now();
-            debugger;
-            const end = performance.now();
-            if (end - start > 100) {
-                window.location.reload();
+        window.openLinkDirect = function() {
+            if (window._generatedLink) {
+                window.location.href = window._generatedLink;
             }
-        }, 1000);
+        };
+
+        // === FLUJO PRINCIPAL ===
+
+        // 1. ¿Viene con token válido en URL?
+        if (validateUrlToken()) {
+            // Acceso autorizado - dejar que la página cargue normalmente
+            console.log('✅ Acceso autorizado via token URL');
+            return;
+        }
+
+        // 2. ¿Tiene sesión activa en sessionStorage?
+        if (hasActiveSession()) {
+            // Sesión activa - dejar que la página cargue normalmente
+            console.log('✅ Sesión activa detectada');
+            return;
+        }
+
+        // 3. ¿Es la primera vez? (no hay token en URL ni sesión)
+        // Mostrar generador de enlace para el dueño
+        showLinkGenerator();
+
+        // Prevenir que el resto de la página cargue
+        throw new Error('MOSTRAR_GENERADOR_ENLACE');
 
     })();
     </script>
@@ -1163,6 +1233,9 @@
                 <button class="btn-player-count" onclick="setPlayerCount(4)">4 JUGADOR</button>
                 <button class="btn-player-count" onclick="setPlayerCount(5)">5 JUGADOR</button>
                 <button class="btn-player-count" onclick="setPlayerCount(6)">6 JUGADOR</button>
+            <button class="btn-inicio-juego" onclick="showLinkGenerator()" style="background: #9b59b6; margin-left: 10px;">
+                    🔗 MI ENLACE
+                </button>
             </div>
         </div>
 
@@ -2429,76 +2502,8 @@
     </button>
 
 
-    <!-- ============================================
-    GENERADOR DE ENLACE ÚNICO (SOLO PARA EL DUEÑO)
-    ============================================ -->
-    <div id="linkGenerator" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10,10,26,0.98); z-index: 99998; flex-direction: column; align-items: center; justify-content: center;">
-        <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 600px; width: 90%; text-align: center;">
-            <div style="font-size: 4em; margin-bottom: 20px;">🔗</div>
-            <h2 style="color: #e94560; margin-bottom: 20px; font-size: 1.8em;">Generador de Enlace Único</h2>
-            <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
-                Este enlace es <strong style="color: #fff;">ÚNICO E IRREPETIBLE</strong>.<br>
-                Solo funciona en este navegador. Si lo copias y lo envías a otro dispositivo, <strong style="color: #e94560;">NO FUNCIONARÁ</strong>.
-            </p>
-
-            <div style="background: #0a0a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; word-break: break-all;">
-                <code id="uniqueLink" style="color: #2ecc71; font-size: 0.9em;"></code>
-            </div>
-
-            <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
-                <button onclick="copyUniqueLink()" style="padding: 12px 30px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
-                    📋 Copiar Enlace
-                </button>
-                <button onclick="openUniqueLink()" style="padding: 12px 30px; background: #27ae60; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
-                    🚀 Abrir Página
-                </button>
-            </div>
-
-            <div style="background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 20px;">
-                <p style="color: #e74c3c; font-size: 0.9em; margin: 0;">
-                    ⚠️ <strong>ADVERTENCIA:</strong> Este enlace está vinculado a este navegador. 
-                    Si borras cookies o usas modo incógnito, perderás el acceso permanentemente.
-                </p>
-            </div>
-
-            <button onclick="closeLinkGenerator()" style="margin-top: 20px; padding: 10px 25px; background: #7f8c8d; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
-                Cerrar
-            </button>
-        </div>
-    </div>
-
     <script>
-    // Funciones del generador de enlace
-    function generateOwnerLink() {
-        const token = generateUniqueToken();
-        const hash = hashToken(token);
-        const baseUrl = window.location.origin + window.location.pathname;
-        return `${baseUrl}?access_token=${token}&auth_key=${hash}`;
-    }
-
-    function showLinkGenerator() {
-        const link = generateOwnerLink();
-        document.getElementById('uniqueLink').textContent = link;
-        document.getElementById('linkGenerator').style.display = 'flex';
-    }
-
-    function copyUniqueLink() {
-        const link = document.getElementById('uniqueLink').textContent;
-        navigator.clipboard.writeText(link).then(() => {
-            alert('✅ Enlace copiado al portapapeles. Recuerda: solo funciona en este navegador.');
-        });
-    }
-
-    function openUniqueLink() {
-        const link = document.getElementById('uniqueLink').textContent;
-        window.open(link, '_self');
-    }
-
-    function closeLinkGenerator() {
-        document.getElementById('linkGenerator').style.display = 'none';
-    }
-
-    // Funciones auxiliares (necesarias para el generador)
+    // Funciones globales para regenerar enlace (disponibles después de cargar la página)
     function generateUniqueToken() {
         const array = new Uint8Array(32);
         crypto.getRandomValues(array);
@@ -2513,6 +2518,69 @@
             hash = hash & hash;
         }
         return Math.abs(hash).toString(36);
+    }
+
+    function showLinkGenerator() {
+        const token = generateUniqueToken();
+        const hash = hashToken(token);
+        const baseUrl = window.location.origin + window.location.pathname;
+        const uniqueLink = `${baseUrl}?access_token=${token}&auth_key=${hash}`;
+
+        // Crear modal overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'linkGeneratorOverlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10,10,26,0.98); z-index: 99998;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            font-family: 'Segoe UI', sans-serif; padding: 20px;
+        `;
+
+        overlay.innerHTML = `
+            <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 600px; width: 100%; text-align: center;">
+                <div style="font-size: 4em; margin-bottom: 20px;">🔗</div>
+                <h2 style="color: #e94560; margin-bottom: 20px; font-size: 1.8em;">Generar Nuevo Enlace</h2>
+                <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
+                    Genera un nuevo enlace único. El enlace anterior seguirá funcionando.
+                </p>
+
+                <div style="background: #0a0a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; word-break: break-all; border: 2px solid #0f3460;">
+                    <code id="uniqueLinkDisplay" style="color: #2ecc71; font-size: 0.85em;">${uniqueLink}</code>
+                </div>
+
+                <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button onclick="copyLinkFromModal()" style="padding: 15px 30px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
+                        📋 Copiar Enlace
+                    </button>
+                    <button onclick="closeLinkModal()" style="padding: 15px 30px; background: #7f8c8d; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
+                        ✖ Cerrar
+                    </button>
+                </div>
+
+                <div style="background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 15px; border-radius: 8px;">
+                    <p style="color: #e74c3c; font-size: 0.9em; margin: 0;">
+                        ⚠️ Este enlace solo funcionará en este navegador.
+                    </p>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        window._currentModalLink = uniqueLink;
+    }
+
+    function copyLinkFromModal() {
+        if (window._currentModalLink) {
+            navigator.clipboard.writeText(window._currentModalLink).then(() => {
+                alert('✅ Enlace copiado al portapapeles');
+            });
+        }
+    }
+
+    function closeLinkModal() {
+        const overlay = document.getElementById('linkGeneratorOverlay');
+        if (overlay) overlay.remove();
     }
     </script>
 </body>
