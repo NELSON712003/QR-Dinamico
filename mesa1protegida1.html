@@ -1,0 +1,2587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <title>Nesa 2 - Sistema de Marcador con Transmisión en Vivo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #16213e;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 2px solid #0f3460;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header h1 {
+            font-size: 1.5em;
+            color: #e94560;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .live-indicator {
+            color: #e74c3c;
+            font-size: 0.6em;
+            animation: blink 1s infinite;
+        }
+
+        .broadcast-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(231, 76, 60, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 1px solid #e74c3c;
+        }
+
+        .broadcast-dot {
+            width: 8px;
+            height: 8px;
+            background: #e74c3c;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .broadcast-text {
+            font-size: 0.8em;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .viewer-count {
+            font-size: 0.75em;
+            color: #aaa;
+            margin-left: 10px;
+        }
+
+        .player-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-inicio-juego {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #2ecc71;
+            color: #fff;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn-inicio-juego:hover {
+            background: #27ae60;
+            transform: scale(1.05);
+        }
+
+        .btn-player-count {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #0f3460;
+            color: #fff;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .btn-player-count:hover, .btn-player-count.active {
+            background: #e94560;
+            transform: scale(1.05);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 10px;
+            min-height: 0;
+        }
+
+        /* Player Columns */
+        .players-left, .players-right {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 33.33%;
+            min-width: 200px;
+        }
+
+        .player-card {
+            background: #16213e;
+            border-radius: 15px;
+            padding: 15px;
+            border: 3px solid #0f3460;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            transition: all 0.3s;
+            min-height: 0;
+            height: 100%;
+            max-height: 100%;
+        }
+
+        .player-card.active {
+            border-color: #e94560;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+        }
+
+        .player-card.yellow-theme {
+            background: #ffff5e;
+            border-color: #d68910;
+            color: #000;
+        }
+
+        .player-card.white-theme {
+            background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
+            color: #000;
+            border-color: #95a5a6;
+        }
+
+        .player-number {
+            font-size: 1em;
+            font-weight: bold;
+            opacity: 0.8;
+            align-self: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .player-card.yellow-theme .player-number {
+            color: #000;
+        }
+
+        .player-card.white-theme .player-number {
+            color: #000;
+        }
+
+        .score-display {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 0;
+        }
+
+        .player-score {
+            font-size: 70px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            user-select: none;
+        }
+
+        .player-card.yellow-theme .player-score {
+            color: #000;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.3);
+        }
+
+        .player-card.white-theme .player-score {
+            color: #000;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.3);
+        }
+
+        .player-score:active {
+            transform: scale(0.95);
+        }
+
+        .score-controls {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            width: 100%;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .score-btn {
+            flex: 1;
+            min-width: 35px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .score-btn:hover {
+            background: #e94560;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .score-btn:active {
+            transform: translateY(0);
+        }
+
+        .score-btn.add {
+            background: #27ae60;
+        }
+
+        .score-btn.add:hover {
+            background: #2ecc71;
+        }
+
+        .score-btn.subtract {
+            background: #c0392b;
+        }
+
+        .score-btn.subtract:hover {
+            background: #e74c3c;
+        }
+
+        .player-card.yellow-theme .score-btn {
+            background: rgba(0,0,0,0.2);
+            color: #000;
+        }
+
+        .player-card.yellow-theme .score-btn.add {
+            background: rgba(39, 174, 96, 0.8);
+            color: #fff;
+        }
+
+        .player-card.yellow-theme .score-btn.subtract {
+            background: rgba(192, 57, 43, 0.8);
+            color: #fff;
+        }
+
+        .player-card.white-theme .score-btn {
+            background: rgba(0,0,0,0.1);
+            color: #2c3e50;
+        }
+
+        .player-card.white-theme .score-btn.add {
+            background: rgba(39, 174, 96, 0.8);
+            color: #fff;
+        }
+
+        .player-card.white-theme .score-btn.subtract {
+            background: rgba(192, 57, 43, 0.8);
+            color: #fff;
+        }
+
+        /* Center Panel - Camera & Recording */
+        .center-panel {
+            width: 33.33%;
+            min-width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: relative;
+        }
+
+        .camera-container {
+            flex: 1;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            border: 3px solid #0f3460;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Botón REPETIR superior delgado */
+        .btn-repetir-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            padding: 5px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+        }
+
+        .btn-repetir {
+            padding: 6px 30px;
+            border: 2px solid #fff;
+            border-radius: 20px;
+            background: rgba(231, 76, 60, 0.9);
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            backdrop-filter: blur(5px);
+        }
+
+        .btn-repetir:hover {
+            background: rgba(192, 57, 43, 1);
+            transform: scale(1.05);
+        }
+
+        .btn-repetir.recording {
+            background: rgba(46, 204, 113, 0.9);
+            animation: pulse-record 1.5s infinite;
+        }
+
+        .btn-repetir.recording:hover {
+            background: rgba(39, 174, 96, 1);
+        }
+
+        @keyframes pulse-record {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); }
+        }
+
+        .camera-feed, .playback-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            flex: 1;
+        }
+
+        .camera-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #0f3460;
+            font-size: 1.1em;
+            text-align: center;
+            padding: 20px;
+            flex: 1;
+        }
+
+        /* Controles de reproducción deslizables */
+        .playback-controls-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(22, 33, 62, 0.95);
+            border-top: 2px solid #0f3460;
+            transform: translateY(calc(100% - 4px));
+            transition: transform 0.3s ease;
+            z-index: 20;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .playback-controls-container.expanded {
+            transform: translateY(0);
+        }
+
+        /* Botón circular azul para deslizar */
+        .slider-handle {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #3498db;
+            border: 3px solid #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+            z-index: 25;
+        }
+
+        .slider-handle:hover {
+            background: #2980b9;
+            transform: translateX(-50%) scale(1.1);
+        }
+
+        .slider-handle::before {
+            content: '▲';
+            color: #fff;
+            font-size: 12px;
+            transition: transform 0.3s;
+        }
+
+        .playback-controls-container.expanded .slider-handle::before {
+            transform: rotate(180deg);
+        }
+
+        .playback-controls {
+            padding: 20px;
+            padding-top: 30px;
+        }
+
+        .playback-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .playback-title {
+            font-size: 0.9em;
+            color: #aaa;
+            text-transform: uppercase;
+        }
+
+        .btn-close-playback {
+            background: #e74c3c;
+            border: none;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+
+        /* Slider de video */
+        .video-slider-container {
+            margin-bottom: 15px;
+        }
+
+        .video-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #0f3460;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .video-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .video-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        /* Lista de grabaciones */
+        .recordings-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(15, 52, 96, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .recording-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            margin-bottom: 5px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .recording-item:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateX(5px);
+        }
+
+        .recording-item.active {
+            background: rgba(52, 152, 219, 0.3);
+            border-left: 3px solid #3498db;
+        }
+
+        .recording-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .recording-name {
+            font-size: 0.85em;
+            color: #fff;
+        }
+
+        .recording-time {
+            font-size: 0.75em;
+            color: #888;
+        }
+
+        .recording-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-recording-action {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+
+        .btn-recording-action:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .btn-recording-action.delete:hover {
+            background: #e74c3c;
+        }
+
+        /* Indicador de grabación - OCULTO PERO FUNCIONAL */
+        .recording-indicator {
+            position: absolute;
+            top: 50px;
+            right: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(231, 76, 60, 0.9);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            z-index: 15;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s;
+        }
+
+        /* Camera Status Info - OCULTO */
+        .camera-info {
+            display: none;
+        }
+
+        /* Stats Panel - OCULTO */
+        .stats-panel {
+            display: none;
+        }
+
+        /* Footer Controls */
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #16213e;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #0f3460;
+            gap: 20px;
+        }
+
+        .timer-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .timer-display {
+            font-size: 3em;
+            font-weight: bold;
+            color: #e94560;
+            font-family: 'Courier New', monospace;
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .timer-display.warning {
+            animation: pulse 1s infinite;
+            color: #f39c12;
+        }
+
+        .timer-display.danger {
+            animation: pulse 0.5s infinite;
+            color: #c0392b;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .controls-section {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        /* Botón TIEMPO JUGADOR */
+        .control-btn {
+            padding: 8px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            text-transform: uppercase;
+            line-height: 1.2;
+        }
+
+        .btn-tiempo {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .btn-tiempo:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+
+        .btn-sound {
+            background: #3498db;
+            color: #fff;
+            padding: 15px;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-sound.muted {
+            background: #7f8c8d;
+        }
+
+        .clock-display {
+            font-size: 1.5em;
+            color: #aaa;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #16213e;
+            padding: 40px;
+            border-radius: 20px;
+            border: 3px solid #e94560;
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .modal-btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .modal-btn.yes {
+            background: #27ae60;
+            color: #fff;
+        }
+
+        .modal-btn.no {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .modal-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* Hidden state */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Responsive */
+        @media (max-width: 1400px) {
+            .player-score {
+                font-size: 55px;
+            }
+            .score-btn {
+                height: 35px;
+                font-size: 1.1em;
+                min-width: 30px;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .player-score {
+                font-size: 45px;
+            }
+            .score-btn {
+                height: 30px;
+                font-size: 1em;
+                min-width: 28px;
+            }
+            .center-panel {
+                min-width: 200px;
+            }
+        }
+
+        /* Ajuste cuando hay 5-6 jugadores activos - pantalla completa */
+        @media (min-height: 800px) {
+            .players-left:has(.player-card:nth-child(3)),
+            .players-right:has(.player-card:nth-child(3)) {
+                /* cuando hay 3 tarjetas por columna */
+            }
+        }
+
+        /* Ajuste dinámico según cantidad de jugadores visibles */
+        .player-card .player-score {
+            font-size: 70px;
+        }
+
+        /* Scrollbar personalizada */
+        .recordings-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .recordings-list::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+            border-radius: 3px;
+        }
+
+        .recordings-list::-webkit-scrollbar-thumb {
+            background: #3498db;
+            border-radius: 3px;
+        }
+
+        /* Botón de Pantalla Completa */
+        .fullscreen-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            background: #0f3460;
+            border: 2px solid #3498db;
+            color: #fff;
+            font-size: 1.5em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            z-index: 100;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .fullscreen-btn:hover {
+            background: #3498db;
+            transform: scale(1.1);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+        }
+
+        .fullscreen-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Camera selector overlay */
+        .camera-selector-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .camera-selector-overlay.active {
+            display: flex;
+        }
+
+        .camera-selector-title {
+            font-size: 1.5em;
+            color: #e94560;
+            margin-bottom: 10px;
+        }
+
+        .camera-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .camera-option {
+            background: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 10px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .camera-option:hover {
+            border-color: #e94560;
+            transform: translateX(5px);
+        }
+
+        .camera-option.selected {
+            border-color: #2ecc71;
+            background: rgba(46, 204, 113, 0.1);
+        }
+
+        .camera-option .camera-icon {
+            font-size: 1.5em;
+        }
+
+        .camera-option .camera-info {
+            flex: 1;
+        }
+
+        .camera-option .camera-name {
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .camera-option .camera-type {
+            font-size: 0.8em;
+            color: #aaa;
+        }
+
+        .camera-option .camera-status {
+            font-size: 0.75em;
+            padding: 3px 10px;
+            border-radius: 10px;
+            background: #0f3460;
+        }
+
+        .camera-option .camera-status.wifi {
+            background: #3498db;
+            color: #fff;
+        }
+
+        .camera-option .camera-status.phone {
+            background: #9b59b6;
+            color: #fff;
+        }
+
+        .camera-option .camera-status.usb {
+            background: #e67e22;
+            color: #fff;
+        }
+
+        .btn-refresh-cameras {
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .btn-refresh-cameras:hover {
+            background: #2980b9;
+            transform: scale(1.05);
+        }
+
+        .camera-preview {
+            width: 120px;
+            height: 80px;
+            background: #000;
+            border-radius: 5px;
+            object-fit: cover;
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <!-- ============================================
+    SISTEMA DE ENLACE ÚNICO - PROTECCIÓN DE ACCESO
+    ============================================ -->
+    <script>
+    (function() {
+        // Generar token único criptográficamente seguro
+        function generateUniqueToken() {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Crear hash del token para validación
+        function hashToken(token) {
+            let hash = 0;
+            for (let i = 0; i < token.length; i++) {
+                const char = token.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(36);
+        }
+
+        // Verificar si viene con token válido en URL
+        function validateUrlToken() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlToken = urlParams.get('access_token');
+            const urlHash = urlParams.get('auth_key');
+
+            if (urlToken && urlHash) {
+                if (hashToken(urlToken) === urlHash) {
+                    // Token válido - guardar en sessionStorage
+                    sessionStorage.setItem('mesa1_access_token', urlToken);
+                    sessionStorage.setItem('mesa1_auth_verified', 'true');
+                    sessionStorage.setItem('mesa1_open_time', Date.now().toString());
+
+                    // Limpiar URL para que no se pueda copiar
+                    if (window.history.replaceState) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Verificar si hay sesión activa en sessionStorage
+        function hasActiveSession() {
+            const storedToken = sessionStorage.getItem('mesa1_access_token');
+            const verified = sessionStorage.getItem('mesa1_auth_verified');
+            const openTime = sessionStorage.getItem('mesa1_open_time');
+
+            if (storedToken && verified === 'true' && openTime) {
+                const timeElapsed = Date.now() - parseInt(openTime);
+                const maxTime = 8 * 60 * 60 * 1000; // 8 horas
+
+                if (timeElapsed < maxTime) {
+                    sessionStorage.setItem('mesa1_open_time', Date.now().toString());
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Mostrar pantalla de acceso bloqueado
+        function showBlockedScreen() {
+            document.body.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 0; left: 0; width: 100%; height: 100%;
+                    background: #0a0a1a;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    color: #e94560;
+                    font-family: 'Segoe UI', sans-serif;
+                    z-index: 99999;
+                ">
+                    <div style="font-size: 5em; margin-bottom: 20px;">🔒</div>
+                    <h1 style="font-size: 2em; margin-bottom: 15px;">ACCESO BLOQUEADO</h1>
+                    <p style="color: #888; font-size: 1.2em; max-width: 500px; text-align: center; line-height: 1.6;">
+                        Esta página solo puede abrirse desde el enlace único autorizado.<br><br>
+                        Si copiaste el enlace, no funcionará.<br>
+                        Solo el propietario original puede acceder.
+                    </p>
+                    <div style="margin-top: 30px; padding: 15px 30px; background: #16213e; border-radius: 10px; border: 2px solid #e94560;">
+                        <span style="color: #e94560; font-weight: bold;">ID Dispositivo: </span>
+                        <span style="color: #fff; font-family: monospace;">${navigator.userAgent.slice(0, 30)}...</span>
+                    </div>
+                </div>
+            `;
+            document.body.style.overflow = 'hidden';
+
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            document.addEventListener('keydown', e => {
+                if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+                    e.preventDefault();
+                }
+            });
+        }
+
+        // Mostrar generador de enlace para el dueño
+        function showLinkGenerator() {
+            const token = generateUniqueToken();
+            const hash = hashToken(token);
+            const baseUrl = window.location.origin + window.location.pathname;
+            const uniqueLink = `${baseUrl}?access_token=${token}&auth_key=${hash}`;
+
+            document.body.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 0; left: 0; width: 100%; height: 100%;
+                    background: #0a0a1a;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: 'Segoe UI', sans-serif;
+                    z-index: 99999;
+                    padding: 20px;
+                ">
+                    <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 600px; width: 100%; text-align: center;">
+                        <div style="font-size: 4em; margin-bottom: 20px;">🔗</div>
+                        <h2 style="color: #e94560; margin-bottom: 20px; font-size: 1.8em;">Bienvenido, Dueño</h2>
+                        <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
+                            Esta es la <strong style="color: #fff;">PRIMERA VEZ</strong> que abres esta página.<br>
+                            Genera tu enlace único ahora. Este enlace solo funcionará en este navegador.
+                        </p>
+
+                        <div style="background: #0a0a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; word-break: break-all; border: 2px solid #0f3460;">
+                            <code id="uniqueLink" style="color: #2ecc71; font-size: 0.85em;">${uniqueLink}</code>
+                        </div>
+
+                        <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+                            <button onclick="copyAndOpenLink()" style="padding: 15px 30px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold; transition: all 0.3s;">
+                                📋 Copiar y Abrir
+                            </button>
+                            <button onclick="openLinkDirect()" style="padding: 15px 30px; background: #27ae60; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold; transition: all 0.3s;">
+                                🚀 Abrir Directamente
+                            </button>
+                        </div>
+
+                        <div style="background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                            <p style="color: #e74c3c; font-size: 0.9em; margin: 0; line-height: 1.5;">
+                                ⚠️ <strong>IMPORTANTE:</strong><br>
+                                • Este enlace es ÚNICO e IRREPETIBLE<br>
+                                • Solo funciona en este navegador específico<br>
+                                • Si borras datos de navegación, perderás acceso<br>
+                                • No funciona en modo incógnito
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.style.overflow = 'hidden';
+
+            // Guardar el enlace generado para las funciones
+            window._generatedLink = uniqueLink;
+        }
+
+        // Funciones globales para los botones del generador
+        window.copyAndOpenLink = function() {
+            if (window._generatedLink) {
+                navigator.clipboard.writeText(window._generatedLink).then(() => {
+                    alert('✅ Enlace copiado. Ahora se abrirá la página...');
+                    window.location.href = window._generatedLink;
+                });
+            }
+        };
+
+        window.openLinkDirect = function() {
+            if (window._generatedLink) {
+                window.location.href = window._generatedLink;
+            }
+        };
+
+        // === FLUJO PRINCIPAL ===
+
+        // 1. ¿Viene con token válido en URL?
+        if (validateUrlToken()) {
+            // Acceso autorizado - dejar que la página cargue normalmente
+            console.log('✅ Acceso autorizado via token URL');
+            return;
+        }
+
+        // 2. ¿Tiene sesión activa en sessionStorage?
+        if (hasActiveSession()) {
+            // Sesión activa - dejar que la página cargue normalmente
+            console.log('✅ Sesión activa detectada');
+            return;
+        }
+
+        // 3. ¿Es la primera vez? (no hay token en URL ni sesión)
+        // Mostrar generador de enlace para el dueño
+        showLinkGenerator();
+
+        // Prevenir que el resto de la página cargue
+        throw new Error('MOSTRAR_GENERADOR_ENLACE');
+
+    })();
+    </script>
+    <!-- FIN SISTEMA DE ENLACE ÚNICO -->
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>
+                    🏆 Fernando Patiño
+                    <span class="live-indicator">● LIVE</span>
+                </h1>
+                <div class="broadcast-status" id="broadcastStatus" style="display: none;">
+                    <div class="broadcast-dot"></div>
+                    <span class="broadcast-text">TRANSMITIENDO</span>
+                    <span class="viewer-count" id="viewerCount">0 espectadores</span>
+                </div>
+            </div>
+            <div class="player-selector">
+                <button class="btn-inicio-juego" onclick="confirmResetFromHeader()">
+                    🔄 INICIO JUEGO
+                </button>
+                <button class="btn-player-count" onclick="setPlayerCount(2)">2 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(3)">3 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(4)">4 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(5)">5 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(6)">6 JUGADOR</button>
+            <button class="btn-inicio-juego" onclick="showLinkGenerator()" style="background: #9b59b6; margin-left: 10px;">
+                    🔗 MI ENLACE
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Players -->
+            <div class="players-left" id="playersLeft"></div>
+
+            <!-- Center Panel - Camera & Recording System -->
+            <div class="center-panel">
+                <div class="camera-container" id="cameraContainer">
+                    <!-- Botón REPETIR superior delgado -->
+                    <div class="btn-repetir-container">
+                        <button class="btn-repetir" id="btnRepetir" onclick="toggleRecording()">
+                            🔴 GRABAR JUGADA
+                        </button>
+                    </div>
+
+                    <!-- Indicador de grabación - OCULTO PERO EXISTE -->
+                    <div class="recording-indicator" id="recordingIndicator">
+                        <div class="rec-dot"></div>
+                        <span>REC</span>
+                        <span id="recordingTime">00:00</span>
+                    </div>
+
+                    <!-- Video en vivo -->
+                    <div class="camera-placeholder" id="cameraPlaceholder">
+                        <div style="font-size: 2.5em; margin-bottom: 10px;">📹</div>
+                        <div id="placeholderText">Buscando cámara...</div>
+                        <button class="btn-refresh-cameras" style="margin-top: 15px;" onclick="showCameraSelector()">
+                            📷 Seleccionar Cámara
+                        </button>
+                    </div>
+                    <video class="camera-feed hidden" id="cameraFeed" autoplay muted playsinline></video>
+                    
+                    <!-- Video de reproducción -->
+                    <video class="playback-video hidden" id="playbackVideo" playsinline></video>
+
+                    <!-- Controles de reproducción deslizables -->
+                    <div class="playback-controls-container" id="playbackControls">
+                        <div class="slider-handle" onclick="togglePlaybackPanel()"></div>
+                        
+                        <div class="playback-controls">
+                            <div class="playback-header">
+                                <span class="playback-title">📼 Grabaciones</span>
+                                <button class="btn-close-playback" onclick="closePlayback()">Cerrar</button>
+                            </div>
+
+                            <!-- Slider de video -->
+                            <div class="video-slider-container">
+                                <input type="range" class="video-slider" id="videoSlider" min="0" max="100" value="0" step="0.1" oninput="seekVideo(this.value)" onchange="playFromSlider()">
+                                <div class="time-display">
+                                    <span id="currentTime">00:00</span>
+                                    <span id="totalTime">00:00</span>
+                                </div>
+                            </div>
+
+                            <!-- Lista de grabaciones -->
+                            <div class="recordings-list" id="recordingsList">
+                                <!-- Las grabaciones se cargan dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera Status Info - OCULTO -->
+                <div class="camera-info" style="display: none;">
+                    <div class="camera-status-title">📹 ESTADO DE CÁMARA</div>
+                    <div class="camera-status-text searching" id="cameraStatus">Buscando...</div>
+                </div>
+
+                <!-- Stats - OCULTO -->
+                <div class="stats-panel" style="display: none;">
+                    <div class="stat-item">
+                        <div class="stat-label">Jugadores</div>
+                        <div class="stat-value" id="playerCountDisplay">2</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Turno</div>
+                        <div class="stat-value" id="currentTurn">-</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Estado</div>
+                        <div class="stat-value" id="gameStatus">Listo</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Players -->
+            <div class="players-right" id="playersRight"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="timer-section">
+                <div class="timer-display" id="shotTimer">40</div>
+                <div class="clock-display" id="clock">00:00:00</div>
+            </div>
+
+            <div class="controls-section">
+                <!-- Botón TIEMPO JUGADOR -->
+                <button class="control-btn btn-tiempo" id="btnTiempo" onclick="startGame()">
+                    ⏱️ TIEMPO JUGADOR
+                </button>
+                <button class="control-btn btn-sound" id="soundBtn" onclick="toggleSound()">
+                    🔊
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera Selector Modal -->
+    <div class="camera-selector-overlay" id="cameraSelector">
+        <div class="camera-selector-title">📷 Seleccionar Fuente de Cámara</div>
+        <div style="color: #aaa; margin-bottom: 10px; text-align: center;">
+            Prioridad: WiFi/IP → Celular → USB/OTG
+        </div>
+        <div class="camera-list" id="cameraList"></div>
+        <button class="btn-refresh-cameras" onclick="refreshCameraList()">
+            🔄 Actualizar Lista
+        </button>
+        <button class="btn-refresh-cameras" style="background: #e74c3c;" onclick="closeCameraSelector()">
+            ✖ Cerrar
+        </button>
+    </div>
+
+    <!-- Reset Modal -->
+    <div class="modal-overlay" id="resetModal">
+        <div class="modal-content">
+            <h2>¿Reiniciar Juego?</h2>
+            <p>Se borrarán todos los puntos. ¿Estás seguro?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn yes" onclick="confirmReset()">Sí</button>
+                <button class="modal-btn no" onclick="hideResetModal()">No</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURACIÓN BROADCAST - ID ÚNICO
+        // ============================================
+        const BROADCASTER_ID = 'fernando-patino-mesa1-2024';
+        const PEER_CONFIG = {
+            host: '0.peerjs.com',
+            port: 443,
+            secure: true,
+            debug: 1
+        };
+
+        // ============================================
+        // GAME STATE
+        // ============================================
+        let playerCount = 2;
+        let players = [];
+        let timerInterval = null;
+        let shotTime = 40;
+        let isTimerRunning = false;
+        let soundEnabled = true;
+        let stream = null;
+        let currentCameraLabel = '';
+        let currentDeviceId = null;
+
+        // ============================================
+        // RECORDING STATE
+        // ============================================
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let recordingStartTime = null;
+        let recordingTimerInterval = null;
+        let recordings = [];
+        let currentPlaybackUrl = null;
+        let currentRecordingId = null;
+        let isPlayingFromSlider = false;
+
+        // ============================================
+        // BROADCAST STATE
+        // ============================================
+        let broadcastPeer = null;
+        let activeCalls = new Map();
+        let isBroadcasting = false;
+
+        // ============================================
+        // INDEXEDDB
+        // ============================================
+        const DB_NAME = 'Mesa1RecordingsDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'recordings';
+        let db = null;
+
+        // ============================================
+        // AUDIO CONTEXT
+        // ============================================
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // ============================================
+        // CAMERA PRIORITY CONFIGURATION
+        // ============================================
+        const CAMERA_PRIORITY = {
+            WIFI: 1,      // IP cameras, WiFi cameras (highest priority)
+            PHONE: 2,     // Phone built-in camera
+            USB_OTG: 3,   // USB/OTG adapters
+            EXTERNAL: 4,  // HDMI capture cards, webcams
+            INTERNAL: 5   // Laptop built-in (lowest priority)
+        };
+
+        // Keywords for camera classification
+        const CAMERA_KEYWORDS = {
+            wifi: ['ip camera', 'network', 'wifi', 'wireless', 'rtsp', 'onvif', 'p2p', 'cloud', 'remote'],
+            usb_otg: ['usb', 'otg', 'uvc', 'generic usb', 'usb camera', 'usb2.0', 'usb3.0'],
+            external: ['hdmi', 'capture', 'cam link', 'elgato', 'avermedia', 'blackmagic', 'magewell', 'obs', 'virtual'],
+            internal: ['integrated', 'built-in', 'internal', 'laptop', 'front', 'rear', 'faceTime', 'photo booth', 'snap']
+        };
+
+        // ============================================
+        // CAMERA CLASSIFICATION FUNCTIONS
+        // ============================================
+        function classifyCamera(label) {
+            if (!label) return { type: 'unknown', priority: 99 };
+            
+            const lowerLabel = label.toLowerCase();
+            
+            // Check WiFi/IP cameras first (highest priority)
+            for (const keyword of CAMERA_KEYWORDS.wifi) {
+                if (lowerLabel.includes(keyword)) {
+                    return { type: 'wifi', priority: CAMERA_PRIORITY.WIFI, label: 'WiFi/IP' };
+                }
+            }
+            
+            // Check USB/OTG cameras
+            for (const keyword of CAMERA_KEYWORDS.usb_otg) {
+                if (lowerLabel.includes(keyword)) {
+                    return { type: 'usb_otg', priority: CAMERA_PRIORITY.USB_OTG, label: 'USB/OTG' };
+                }
+            }
+            
+            // Check external capture devices
+            for (const keyword of CAMERA_KEYWORDS.external) {
+                if (lowerLabel.includes(keyword)) {
+                    return { type: 'external', priority: CAMERA_PRIORITY.EXTERNAL, label: 'HDMI/Capture' };
+                }
+            }
+            
+            // Check internal cameras (lowest priority)
+            for (const keyword of CAMERA_KEYWORDS.internal) {
+                if (lowerLabel.includes(keyword)) {
+                    return { type: 'internal', priority: CAMERA_PRIORITY.INTERNAL, label: 'Interna' };
+                }
+            }
+            
+            // Default: if it has "camera" or "cam" but not classified, treat as external
+            if (lowerLabel.includes('camera') || lowerLabel.includes('cam')) {
+                return { type: 'external', priority: CAMERA_PRIORITY.EXTERNAL, label: 'Cámara' };
+            }
+            
+            return { type: 'unknown', priority: 99, label: 'Desconocida' };
+        }
+
+        function getCameraIcon(type) {
+            const icons = {
+                wifi: '📡',
+                phone: '📱',
+                usb_otg: '🔌',
+                external: '🎥',
+                internal: '💻',
+                unknown: '📷'
+            };
+            return icons[type] || '📷';
+        }
+
+        // ============================================
+        // INDEXEDDB FUNCTIONS
+        // ============================================
+        function initIndexedDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve(db);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const database = event.target.result;
+                    if (!database.objectStoreNames.contains(STORE_NAME)) {
+                        const store = database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('timestamp', 'timestamp', { unique: false });
+                    }
+                };
+            });
+        }
+
+        async function saveRecordingToDB(blob, duration) {
+            if (!db) await initIndexedDB();
+            
+            const recording = {
+                blob: blob,
+                timestamp: new Date().toISOString(),
+                duration: duration,
+                name: `Grabación ${new Date().toLocaleString('es-ES')}`
+            };
+            
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.add(recording);
+                
+                request.onsuccess = () => {
+                    recording.id = request.result;
+                    recordings.unshift(recording);
+                    resolve(recording);
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function loadRecordingsFromDB() {
+            if (!db) await initIndexedDB();
+            
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    recordings = request.result.reverse();
+                    resolve(recordings);
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function deleteRecordingFromDB(id) {
+            if (!db) await initIndexedDB();
+            
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.delete(id);
+                
+                request.onsuccess = () => {
+                    recordings = recordings.filter(r => r.id !== id);
+                    resolve();
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // ============================================
+        // AUDIO FUNCTIONS
+        // ============================================
+        function playBeep(frequency = 800, duration = 200, type = 'square') {
+            if (!soundEnabled) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration / 1000);
+        }
+
+        function playWarningSound() {
+            playBeep(600, 100, 'sine');
+            setTimeout(() => playBeep(600, 100, 'sine'), 150);
+        }
+
+        function playFinalSound() {
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => playBeep(400, 300, 'sawtooth'), i * 350);
+            }
+        }
+
+        // ============================================
+        // PLAYER FUNCTIONS
+        // ============================================
+        function initPlayers() {
+            players = [];
+            for (let i = 1; i <= 6; i++) {
+                players.push({
+                    id: i,
+                    score: 0,
+                    active: i <= playerCount
+                });
+            }
+            renderPlayers();
+        }
+
+        function renderPlayers() {
+            const leftContainer = document.getElementById('playersLeft');
+            const rightContainer = document.getElementById('playersRight');
+            
+            leftContainer.innerHTML = '';
+            rightContainer.innerHTML = '';
+
+            players.forEach((player) => {
+                if (!player.active) return;
+                
+                const isLeft = player.id % 2 === 1;
+                const theme = (player.id - 1) % 2 === 0 ? 'yellow-theme' : 'white-theme';
+                
+                const card = document.createElement('div');
+                card.className = `player-card ${theme}`;
+                card.innerHTML = `
+                    <div class="player-number">Jugador ${player.id}</div>
+                    <div class="score-display">
+                        <div class="player-score" onclick="changeScore(${player.id}, 1)">${player.score}</div>
+                    </div>
+                    <div class="score-controls">
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 1)">+1</button>
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 2)">+2</button>
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 3)">+3</button>
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 4)">+4</button>
+                        <button class="score-btn subtract" onclick="changeScore(${player.id}, -1)">-1</button>
+                    </div>
+                `;
+                
+                if (isLeft) {
+                    leftContainer.appendChild(card);
+                } else {
+                    rightContainer.appendChild(card);
+                }
+            });
+        }
+
+        function setPlayerCount(count) {
+            playerCount = count;
+            
+            document.querySelectorAll('.btn-player-count').forEach((btn) => {
+                const btnNumber = parseInt(btn.textContent);
+                btn.classList.toggle('active', btnNumber === count);
+            });
+            
+            initPlayers();
+        }
+
+        function changeScore(playerId, delta) {
+            const player = players.find(p => p.id === playerId);
+            if (!player) return;
+            
+            const newScore = player.score + delta;
+            if (newScore >= 0 && newScore <= 300) {
+                player.score = newScore;
+                renderPlayers();
+                playBeep(1000, 50, 'sine');
+            }
+        }
+
+        // ============================================
+        // CAMERA FUNCTIONS - NEW PRIORITY SYSTEM
+        // ============================================
+        async function getAvailableCameras() {
+            try {
+                // Request permission first to get labels
+                await navigator.mediaDevices.getUserMedia({ video: true });
+                
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                return videoDevices.map(device => {
+                    const classification = classifyCamera(device.label);
+                    return {
+                        deviceId: device.deviceId,
+                        label: device.label || 'Cámara sin nombre',
+                        ...classification
+                    };
+                }).sort((a, b) => a.priority - b.priority);
+                
+            } catch (err) {
+                console.error('Error enumerando cámaras:', err);
+                return [];
+            }
+        }
+
+        async function showCameraSelector() {
+            const cameraList = document.getElementById('cameraList');
+            const selector = document.getElementById('cameraSelector');
+            
+            cameraList.innerHTML = '<div style="text-align: center; color: #aaa; padding: 20px;">Buscando cámaras...</div>';
+            selector.classList.add('active');
+            
+            const cameras = await getAvailableCameras();
+            
+            if (cameras.length === 0) {
+                cameraList.innerHTML = '<div style="text-align: center; color: #e74c3c; padding: 20px;">No se encontraron cámaras</div>';
+                return;
+            }
+            
+            cameraList.innerHTML = cameras.map((cam, index) => `
+                <div class="camera-option ${currentDeviceId === cam.deviceId ? 'selected' : ''}" 
+                     onclick="selectCamera('${cam.deviceId}')">
+                    <div class="camera-icon">${getCameraIcon(cam.type)}</div>
+                    <div class="camera-info">
+                        <div class="camera-name">${cam.label}</div>
+                        <div class="camera-type">Prioridad: ${cam.priority} - ${cam.label}</div>
+                    </div>
+                    <div class="camera-status ${cam.type}">${cam.label}</div>
+                </div>
+            `).join('');
+        }
+
+        function closeCameraSelector() {
+            document.getElementById('cameraSelector').classList.remove('active');
+        }
+
+        function refreshCameraList() {
+            showCameraSelector();
+        }
+
+        async function selectCamera(deviceId) {
+            closeCameraSelector();
+            
+            // Stop current stream if exists
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            
+            try {
+                const constraints = {
+                    video: {
+                        deviceId: { exact: deviceId },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                currentDeviceId = deviceId;
+                
+                const video = document.getElementById('cameraFeed');
+                video.srcObject = stream;
+                
+                document.getElementById('cameraPlaceholder').classList.add('hidden');
+                video.classList.remove('hidden');
+                
+                // Get device info for label
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const device = devices.find(d => d.deviceId === deviceId);
+                currentCameraLabel = device ? device.label : 'Cámara seleccionada';
+                
+                console.log('✅ Cámara conectada:', currentCameraLabel);
+                playBeep(800, 100, 'sine');
+                
+                // Restart broadcast with new stream
+                restartBroadcast();
+                
+            } catch (err) {
+                console.error('Error conectando cámara:', err);
+                alert('Error al conectar la cámara: ' + err.message);
+            }
+        }
+
+        async function findAndConnectCamera() {
+            console.log('🔍 Buscando cámaras con prioridad...');
+            
+            try {
+                const cameras = await getAvailableCameras();
+                
+                if (cameras.length === 0) {
+                    console.log('❌ No se encontraron cámaras');
+                    document.getElementById('placeholderText').textContent = 'No hay cámaras disponibles - Haz clic en "Seleccionar Cámara"';
+                    return;
+                }
+
+                console.log(`📹 ${cameras.length} cámara(s) encontrada(s) ordenadas por prioridad:`);
+                cameras.forEach((cam, i) => {
+                    console.log(`  ${i+1}. [${cam.label}] ${cam.label} - ${cam.label}`);
+                });
+
+                // Try to connect to the highest priority camera
+                for (const camera of cameras) {
+                    try {
+                        console.log(`🎥 Intentando conectar: ${camera.label} (${camera.label})`);
+                        
+                        const constraints = {
+                            video: {
+                                deviceId: { exact: camera.deviceId },
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            },
+                            audio: true
+                        };
+                        
+                        stream = await navigator.mediaDevices.getUserMedia(constraints);
+                        
+                        const video = document.getElementById('cameraFeed');
+                        video.srcObject = stream;
+                        
+                        document.getElementById('cameraPlaceholder').classList.add('hidden');
+                        video.classList.remove('hidden');
+                        
+                        currentDeviceId = camera.deviceId;
+                        currentCameraLabel = camera.label;
+                        
+                        console.log('✅ Cámara conectada:', currentCameraLabel, '- Tipo:', camera.label);
+                        playBeep(800, 100, 'sine');
+                        
+                        // Start broadcast when camera is ready
+                        setTimeout(initBroadcastPeerJS, 1000);
+                        
+                        return;
+                        
+                    } catch (err) {
+                        console.log(`⚠️ Error con ${camera.label}:`, err.message);
+                        continue;
+                    }
+                }
+                
+                document.getElementById('placeholderText').textContent = 'No se pudo conectar ninguna cámara - Usa "Seleccionar Cámara"';
+                
+            } catch (err) {
+                console.error('❌ Error general:', err);
+                document.getElementById('placeholderText').textContent = 'Error de acceso a cámaras';
+            }
+        }
+
+        function restartBroadcast() {
+            // Destroy existing peer and recreate with new stream
+            if (broadcastPeer) {
+                broadcastPeer.destroy();
+                broadcastPeer = null;
+                activeCalls.clear();
+            }
+            
+            setTimeout(initBroadcastPeerJS, 500);
+        }
+
+        // ============================================
+        // PEERJS BROADCAST - TRANSMISIÓN EN VIVO
+        // ============================================
+        function initBroadcastPeerJS() {
+            if (!stream) {
+                console.error('❌ No hay stream disponible para transmitir');
+                return;
+            }
+
+            if (broadcastPeer) {
+                console.log('🔄 Broadcast ya inicializado');
+                return;
+            }
+
+            console.log('📡 Iniciando PeerJS Broadcast con ID:', BROADCASTER_ID);
+            
+            broadcastPeer = new Peer(BROADCASTER_ID, PEER_CONFIG);
+
+            broadcastPeer.on('open', (id) => {
+                console.log('✅ Broadcaster conectado con ID:', id);
+                isBroadcasting = true;
+                
+                // Show broadcast indicator
+                document.getElementById('broadcastStatus').style.display = 'flex';
+                updateViewerCount();
+                
+                playBeep(1000, 200, 'sine');
+            });
+
+            broadcastPeer.on('call', (call) => {
+                console.log('📞 Nuevo espectador conectándose:', call.peer);
+                
+                // Answer with camera stream
+                call.answer(stream);
+                activeCalls.set(call.peer, call);
+                
+                console.log(`✅ Espectador conectado. Total: ${activeCalls.size}`);
+                updateViewerCount();
+                playBeep(1200, 100, 'sine');
+                
+                call.on('stream', (remoteStream) => {
+                    console.log('📥 Stream recibido del viewer (no esperado)');
+                });
+                
+                call.on('close', () => {
+                    console.log('❌ Espectador desconectado:', call.peer);
+                    activeCalls.delete(call.peer);
+                    updateViewerCount();
+                });
+                
+                call.on('error', (err) => {
+                    console.error('❌ Error en llamada:', err);
+                    activeCalls.delete(call.peer);
+                    updateViewerCount();
+                });
+            });
+
+            broadcastPeer.on('error', (err) => {
+                console.error('❌ Error PeerJS:', err);
+                
+                if (err.type === 'unavailable-id') {
+                    console.log('⚠️ ID en uso, intentando con ID alternativo...');
+                    setTimeout(() => {
+                        broadcastPeer.destroy();
+                        broadcastPeer = null;
+                        const altId = BROADCASTER_ID + '-' + Date.now();
+                        console.log('🔄 Intentando con ID:', altId);
+                    }, 2000);
+                } else if (err.type === 'network' || err.type === 'disconnected') {
+                    console.log('🔄 Reconectando en 3 segundos...');
+                    setTimeout(() => {
+                        if (broadcastPeer) {
+                            broadcastPeer.reconnect();
+                        }
+                    }, 3000);
+                }
+            });
+
+            broadcastPeer.on('disconnected', () => {
+                console.log('⚠️ Desconectado del servidor PeerJS');
+                isBroadcasting = false;
+                document.getElementById('broadcastStatus').style.display = 'none';
+                
+                setTimeout(() => {
+                    if (broadcastPeer && !broadcastPeer.destroyed) {
+                        console.log('🔄 Reconectando...');
+                        broadcastPeer.reconnect();
+                    }
+                }, 2000);
+            });
+
+            broadcastPeer.on('close', () => {
+                console.log('🔌 Peer cerrado');
+                isBroadcasting = false;
+                broadcastPeer = null;
+                activeCalls.clear();
+                document.getElementById('broadcastStatus').style.display = 'none';
+            });
+        }
+
+        function updateViewerCount() {
+            const count = activeCalls.size;
+            const viewerCountEl = document.getElementById('viewerCount');
+            viewerCountEl.textContent = `${count} espectador${count !== 1 ? 'es' : ''}`;
+            
+            if (count > 0) {
+                document.title = `🏆 MESA 1 (${count} viendo) - Marcador`;
+            } else {
+                document.title = '🏆 MESA 1 - Marcador con Transmisión';
+            }
+        }
+
+        function getConnectedViewers() {
+            return activeCalls.size;
+        }
+
+        // ============================================
+        // RECORDING FUNCTIONS
+        // ============================================
+        function toggleRecording() {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+
+        function startRecording() {
+            if (!stream) {
+                alert('No hay cámara disponible para grabar');
+                return;
+            }
+
+            recordedChunks = [];
+            const options = { 
+                mimeType: 'video/webm;codecs=vp9,opus',
+                audioBitsPerSecond: 128000,
+                videoBitsPerSecond: 2500000
+            };
+
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'video/webm;codecs=vp8,opus';
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm';
+                }
+            }
+
+            try {
+                mediaRecorder = new MediaRecorder(stream, options);
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: options.mimeType });
+                    const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
+
+                    try {
+                        await saveRecordingToDB(blob, duration);
+                        playBeep(600, 300, 'sine');
+                        updateRecordingsList();
+                    } catch (err) {
+                        console.error('Error guardando grabación:', err);
+                    }
+                };
+
+                mediaRecorder.start(1000);
+                isRecording = true;
+                recordingStartTime = Date.now();
+                
+                // Update UI
+                document.getElementById('btnRepetir').classList.add('recording');
+                document.getElementById('btnRepetir').textContent = '⏹ DETENER';
+                
+                // Hidden recording timer
+                recordingTimerInterval = setInterval(updateRecordingTime, 1000);
+                updateRecordingTime();
+                
+                playBeep(800, 150, 'sine');
+                
+            } catch (err) {
+                console.error('Error iniciando grabación:', err);
+                alert('Error al iniciar la grabación');
+            }
+        }
+
+        function stopRecording() {
+            if (!mediaRecorder || !isRecording) return;
+            
+            mediaRecorder.stop();
+            isRecording = false;
+            clearInterval(recordingTimerInterval);
+            
+            // Update UI
+            document.getElementById('btnRepetir').classList.remove('recording');
+            document.getElementById('btnRepetir').textContent = '🔴 GRABAR JUGADA';
+        }
+
+        function updateRecordingTime() {
+            const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            console.log(`Grabando: ${minutes}:${seconds}`);
+        }
+
+        // ============================================
+        // PLAYBACK FUNCTIONS
+        // ============================================
+        function togglePlaybackPanel() {
+            const panel = document.getElementById('playbackControls');
+            panel.classList.toggle('expanded');
+        }
+
+        function showPlaybackPanel() {
+            document.getElementById('playbackControls').classList.add('expanded');
+        }
+
+        function closePlayback() {
+            document.getElementById('playbackControls').classList.remove('expanded');
+            stopPlayback();
+        }
+
+        function closePlaybackPanelOnly() {
+            document.getElementById('playbackControls').classList.remove('expanded');
+        }
+
+        function playRecording(id) {
+            const recording = recordings.find(r => r.id === id);
+            if (!recording) return;
+
+            if (currentPlaybackUrl) {
+                URL.revokeObjectURL(currentPlaybackUrl);
+                currentPlaybackUrl = null;
+            }
+
+            currentPlaybackUrl = URL.createObjectURL(recording.blob);
+            currentRecordingId = id;
+
+            const playbackVideo = document.getElementById('playbackVideo');
+            const cameraFeed = document.getElementById('cameraFeed');
+            const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+
+            playbackVideo.src = currentPlaybackUrl;
+            playbackVideo.classList.remove('hidden');
+            cameraFeed.classList.add('hidden');
+            cameraPlaceholder.classList.add('hidden');
+
+            closePlaybackPanelOnly();
+
+            playbackVideo.onloadedmetadata = () => {
+                const slider = document.getElementById('videoSlider');
+                slider.max = playbackVideo.duration;
+                document.getElementById('totalTime').textContent = formatTime(playbackVideo.duration);
+                playbackVideo.play();
+            };
+
+            playbackVideo.ontimeupdate = () => {
+                if (!isPlayingFromSlider) {
+                    const slider = document.getElementById('videoSlider');
+                    slider.value = playbackVideo.currentTime;
+                    document.getElementById('currentTime').textContent = formatTime(playbackVideo.currentTime);
+                }
+            };
+
+            playbackVideo.onended = () => {
+                document.getElementById('btnRepetir').textContent = '🔴 GRABAR JUGADA';
+            };
+
+            updateRecordingsList();
+        }
+
+        function stopPlayback() {
+            const playbackVideo = document.getElementById('playbackVideo');
+            if (!playbackVideo.paused) {
+                playbackVideo.pause();
+            }
+            playbackVideo.src = '';
+            playbackVideo.classList.add('hidden');
+            
+            if (stream) {
+                document.getElementById('cameraFeed').classList.remove('hidden');
+            } else {
+                document.getElementById('cameraPlaceholder').classList.remove('hidden');
+            }
+            
+            if (currentPlaybackUrl) {
+                URL.revokeObjectURL(currentPlaybackUrl);
+                currentPlaybackUrl = null;
+            }
+            currentRecordingId = null;
+        }
+
+        function seekVideo(value) {
+            isPlayingFromSlider = true;
+            const playbackVideo = document.getElementById('playbackVideo');
+            if (playbackVideo.src) {
+                playbackVideo.currentTime = value;
+                document.getElementById('currentTime').textContent = formatTime(value);
+            }
+        }
+
+        function playFromSlider() {
+            isPlayingFromSlider = false;
+            const playbackVideo = document.getElementById('playbackVideo');
+            if (playbackVideo.src && playbackVideo.paused) {
+                playbackVideo.play();
+            }
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return '00:00';
+            const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        }
+
+        async function updateRecordingsList() {
+            const listContainer = document.getElementById('recordingsList');
+            
+            if (recordings.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No hay grabaciones</div>';
+                return;
+            }
+            
+            listContainer.innerHTML = recordings.map(rec => `
+                <div class="recording-item ${rec.id === currentRecordingId ? 'active' : ''}" onclick="playRecording(${rec.id})">
+                    <div class="recording-info">
+                        <span class="recording-name">${rec.name}</span>
+                        <span class="recording-time">${formatTime(rec.duration)} - ${new Date(rec.timestamp).toLocaleDateString()}</span>
+                    </div>
+                    <div class="recording-actions">
+                        <button class="btn-recording-action" onclick="event.stopPropagation(); downloadRecording(${rec.id})" title="Descargar">
+                            💾
+                        </button>
+                        <button class="btn-recording-action delete" onclick="event.stopPropagation(); deleteRecording(${rec.id})" title="Eliminar">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deleteRecording(id) {
+            if (!confirm('¿Eliminar esta grabación?')) return;
+            
+            try {
+                await deleteRecordingFromDB(id);
+                if (currentRecordingId === id) {
+                    stopPlayback();
+                }
+                updateRecordingsList();
+                playBeep(400, 200, 'sawtooth');
+            } catch (err) {
+                console.error('Error eliminando grabación:', err);
+            }
+        }
+
+        function downloadRecording(id) {
+            const recording = recordings.find(r => r.id === id);
+            if (!recording) return;
+            
+            const url = URL.createObjectURL(recording.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mesa1_grabacion_${new Date(recording.timestamp).getTime()}.webm`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // ============================================
+        // TIMER FUNCTIONS
+        // ============================================
+        function startTimer() {
+            if (isTimerRunning) return;
+            
+            isTimerRunning = true;
+            shotTime = 40;
+            updateTimerDisplay();
+            
+            document.getElementById('btnTiempo').textContent = '⏸️ PAUSAR';
+            document.getElementById('btnTiempo').onclick = pauseGame;
+            
+            timerInterval = setInterval(() => {
+                shotTime--;
+                updateTimerDisplay();
+                
+                if (shotTime === 10) {
+                    playWarningSound();
+                    document.getElementById('shotTimer').classList.add('warning');
+                }
+                
+                if (shotTime <= 5 && shotTime > 0) {
+                    playBeep(800, 100);
+                }
+                
+                if (shotTime <= 0) {
+                    playFinalSound();
+                    setTimeout(() => {
+                        shotTime = 40;
+                        document.getElementById('shotTimer').classList.remove('warning', 'danger');
+                        updateTimerDisplay();
+                        playBeep(600, 100);
+                    }, 1500);
+                }
+            }, 1000);
+        }
+
+        function pauseGame() {
+            isTimerRunning = false;
+            clearInterval(timerInterval);
+            document.getElementById('btnTiempo').textContent = '▶️ TIEMPO JUGADOR';
+            document.getElementById('btnTiempo').onclick = startTimer;
+        }
+
+        function updateTimerDisplay() {
+            const display = document.getElementById('shotTimer');
+            display.textContent = shotTime;
+            
+            if (shotTime > 10) {
+                display.classList.remove('warning', 'danger');
+            }
+        }
+
+        function startGame() {
+            shotTime = 40;
+            document.getElementById('shotTimer').classList.remove('warning', 'danger');
+            updateTimerDisplay();
+            
+            startTimer();
+        }
+
+        // ============================================
+        // CLOCK & SOUND
+        // ============================================
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('es-ES', { hour12: false });
+            document.getElementById('clock').textContent = timeString;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('soundBtn');
+            btn.textContent = soundEnabled ? '🔊' : '🔇';
+            btn.classList.toggle('muted', !soundEnabled);
+        }
+
+        // ============================================
+        // RESET FUNCTIONS
+        // ============================================
+        function showResetModal() {
+            document.getElementById('resetModal').classList.add('active');
+            if (isTimerRunning) pauseGame();
+        }
+
+        function hideResetModal() {
+            document.getElementById('resetModal').classList.remove('active');
+        }
+
+        function confirmResetFromHeader() {
+            showResetModal();
+        }
+
+        function confirmReset() {
+            players.forEach(p => p.score = 0);
+            renderPlayers();
+            
+            shotTime = 40;
+            isTimerRunning = false;
+            clearInterval(timerInterval);
+            document.getElementById('shotTimer').classList.remove('warning', 'danger');
+            updateTimerDisplay();
+            document.getElementById('btnTiempo').textContent = '▶️ TIEMPO JUGADOR';
+            document.getElementById('btnTiempo').onclick = startGame;
+            
+            deleteAllRecordings();
+
+            hideResetModal();
+            playBeep(600, 200);
+        }
+
+        async function deleteAllRecordings() {
+            if (!db) await initIndexedDB();
+
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.clear();
+
+                request.onsuccess = () => {
+                    recordings = [];
+                    stopPlayback();
+                    updateRecordingsList();
+                    closePlayback();
+                    console.log('✅ Todas las grabaciones han sido eliminadas');
+                    resolve();
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        async function init() {
+            initPlayers();
+            
+            // Start camera with priority system
+            setTimeout(findAndConnectCamera, 500);
+            
+            // Load previous recordings
+            try {
+                await initIndexedDB();
+                await loadRecordingsFromDB();
+                updateRecordingsList();
+            } catch (err) {
+                console.log('IndexedDB no disponible, usando almacenamiento en memoria');
+            }
+            
+            // Listen for device changes
+            navigator.mediaDevices.addEventListener('devicechange', () => {
+                console.log('🔄 Dispositivos cambiados, reescaneando...');
+                setTimeout(() => {
+                    if (!currentDeviceId) {
+                        findAndConnectCamera();
+                    }
+                }, 1000);
+            });
+        }
+
+        // ============================================
+        // KEYBOARD SHORTCUTS
+        // ============================================
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (isTimerRunning) pauseGame();
+                else startGame();
+            }
+            if (e.code === 'KeyM') toggleSound();
+            if (e.code === 'KeyR') toggleRecording();
+            if (e.code === 'KeyC') showCameraSelector();
+        });
+
+        // ============================================
+        // LIMPIEZA AL CERRAR
+        // ============================================
+        window.addEventListener('beforeunload', () => {
+            if (broadcastPeer) {
+                broadcastPeer.destroy();
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        // Iniciar aplicación
+        init();
+
+        // ============================================
+        // FULLSCREEN FUNCTION
+        // ============================================
+        function toggleFullscreen() {
+            const btn = document.getElementById('fullscreenBtn');
+
+            if (!document.fullscreenElement && 
+                !document.mozFullScreenElement && 
+                !document.webkitFullscreenElement && 
+                !document.msFullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.mozRequestFullScreen) {
+                    document.documentElement.mozRequestFullScreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) {
+                    document.documentElement.msRequestFullscreen();
+                }
+                btn.innerHTML = '⛶';
+                btn.title = 'Salir de Pantalla Completa';
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                btn.innerHTML = '⛶';
+                btn.title = 'Pantalla Completa';
+            }
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+        document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
+        document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
+
+        function updateFullscreenIcon() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (document.fullscreenElement || 
+                document.webkitFullscreenElement || 
+                document.mozFullScreenElement || 
+                document.msFullscreenElement) {
+                btn.innerHTML = '⛶';
+                btn.title = 'Salir de Pantalla Completa';
+            } else {
+                btn.innerHTML = '⛶';
+                btn.title = 'Pantalla Completa';
+            }
+        }
+    </script>
+
+    <!-- Botón Pantalla Completa -->
+    <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Pantalla Completa">
+        ⛶
+    </button>
+
+
+    <script>
+    // Funciones globales para regenerar enlace (disponibles después de cargar la página)
+    function generateUniqueToken() {
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function hashToken(token) {
+        let hash = 0;
+        for (let i = 0; i < token.length; i++) {
+            const char = token.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(36);
+    }
+
+    function showLinkGenerator() {
+        const token = generateUniqueToken();
+        const hash = hashToken(token);
+        const baseUrl = window.location.origin + window.location.pathname;
+        const uniqueLink = `${baseUrl}?access_token=${token}&auth_key=${hash}`;
+
+        // Crear modal overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'linkGeneratorOverlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10,10,26,0.98); z-index: 99998;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            font-family: 'Segoe UI', sans-serif; padding: 20px;
+        `;
+
+        overlay.innerHTML = `
+            <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 600px; width: 100%; text-align: center;">
+                <div style="font-size: 4em; margin-bottom: 20px;">🔗</div>
+                <h2 style="color: #e94560; margin-bottom: 20px; font-size: 1.8em;">Generar Nuevo Enlace</h2>
+                <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
+                    Genera un nuevo enlace único. El enlace anterior seguirá funcionando.
+                </p>
+
+                <div style="background: #0a0a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; word-break: break-all; border: 2px solid #0f3460;">
+                    <code id="uniqueLinkDisplay" style="color: #2ecc71; font-size: 0.85em;">${uniqueLink}</code>
+                </div>
+
+                <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button onclick="copyLinkFromModal()" style="padding: 15px 30px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
+                        📋 Copiar Enlace
+                    </button>
+                    <button onclick="closeLinkModal()" style="padding: 15px 30px; background: #7f8c8d; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
+                        ✖ Cerrar
+                    </button>
+                </div>
+
+                <div style="background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 15px; border-radius: 8px;">
+                    <p style="color: #e74c3c; font-size: 0.9em; margin: 0;">
+                        ⚠️ Este enlace solo funcionará en este navegador.
+                    </p>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        window._currentModalLink = uniqueLink;
+    }
+
+    function copyLinkFromModal() {
+        if (window._currentModalLink) {
+            navigator.clipboard.writeText(window._currentModalLink).then(() => {
+                alert('✅ Enlace copiado al portapapeles');
+            });
+        }
+    }
+
+    function closeLinkModal() {
+        const overlay = document.getElementById('linkGeneratorOverlay');
+        if (overlay) overlay.remove();
+    }
+    </script>
+</body>
+</html>
