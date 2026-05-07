@@ -1004,6 +1004,7 @@
         }
     </style>
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
     <!-- ============================================
@@ -1011,14 +1012,21 @@
     ============================================ -->
     <script>
     (function() {
-        // Generar token único criptográficamente seguro
+        // ============================================
+        // CONFIGURACIÓN DE SEGURIDAD
+        // ============================================
+        // PIN de administrador - CAMBIA ESTO POR TU PIN
+        const ADMIN_PIN = '1234';
+        
+        // ============================================
+        // FUNCIONES DE TOKEN
+        // ============================================
         function generateUniqueToken() {
             const array = new Uint8Array(32);
             crypto.getRandomValues(array);
             return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
         }
 
-        // Crear hash del token para validación
         function hashToken(token) {
             let hash = 0;
             for (let i = 0; i < token.length; i++) {
@@ -1029,7 +1037,9 @@
             return Math.abs(hash).toString(36);
         }
 
-        // Verificar si viene con token válido en URL
+        // ============================================
+        // VALIDACIÓN DE ACCESO
+        // ============================================
         function validateUrlToken() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlToken = urlParams.get('access_token');
@@ -1037,12 +1047,10 @@
 
             if (urlToken && urlHash) {
                 if (hashToken(urlToken) === urlHash) {
-                    // Token válido - guardar en sessionStorage
                     sessionStorage.setItem('mesa1_access_token', urlToken);
                     sessionStorage.setItem('mesa1_auth_verified', 'true');
                     sessionStorage.setItem('mesa1_open_time', Date.now().toString());
 
-                    // Limpiar URL para que no se pueda copiar
                     if (window.history.replaceState) {
                         window.history.replaceState({}, document.title, window.location.pathname);
                     }
@@ -1052,7 +1060,6 @@
             return false;
         }
 
-        // Verificar si hay sesión activa en sessionStorage
         function hasActiveSession() {
             const storedToken = sessionStorage.getItem('mesa1_access_token');
             const verified = sessionStorage.getItem('mesa1_auth_verified');
@@ -1070,7 +1077,9 @@
             return false;
         }
 
-        // Mostrar pantalla de acceso bloqueado
+        // ============================================
+        // PANTALLAS DE SEGURIDAD
+        // ============================================
         function showBlockedScreen() {
             document.body.innerHTML = `
                 <div style="
@@ -1108,8 +1117,98 @@
             });
         }
 
-        // Mostrar generador de enlace para el dueño
-        function showLinkGenerator() {
+        // ============================================
+        // PANTALLA DE PIN PARA ADMINISTRADOR
+        // ============================================
+        function showAdminPinScreen() {
+            document.body.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 0; left: 0; width: 100%; height: 100%;
+                    background: #0a0a1a;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: 'Segoe UI', sans-serif;
+                    z-index: 99999;
+                    padding: 20px;
+                ">
+                    <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 450px; width: 100%; text-align: center;">
+                        <div style="font-size: 4em; margin-bottom: 20px;">🔐</div>
+                        <h2 style="color: #e94560; margin-bottom: 10px; font-size: 1.8em;">Acceso de Administrador</h2>
+                        <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
+                            Esta es la <strong style="color: #fff;">PRIMERA VEZ</strong> que se abre esta página.<br>
+                            Ingresa el PIN de administrador para generar tu enlace único.
+                        </p>
+
+                        <div style="margin-bottom: 20px;">
+                            <input type="password" id="adminPinInput" maxlength="4" placeholder="PIN de 4 dígitos" 
+                                style="
+                                    width: 200px; padding: 15px; font-size: 1.5em; text-align: center;
+                                    background: #0a0a1a; border: 2px solid #0f3460; border-radius: 10px;
+                                    color: #fff; letter-spacing: 10px; outline: none;
+                                " 
+                                onkeypress="if(event.key==='Enter') verifyAdminPin()"
+                            >
+                        </div>
+                        
+                        <div id="pinError" style="color: #e74c3c; font-size: 0.9em; margin-bottom: 15px; min-height: 20px; display: none;">
+                            PIN incorrecto. Intenta de nuevo.
+                        </div>
+
+                        <button onclick="verifyAdminPin()" style="
+                            padding: 15px 40px; background: #e94560; color: #fff; border: none;
+                            border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold;
+                            transition: all 0.3s; width: 200px;
+                        ">
+                            🔓 Verificar PIN
+                        </button>
+
+                        <div style="margin-top: 30px; background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 15px; border-radius: 8px;">
+                            <p style="color: #e74c3c; font-size: 0.85em; margin: 0; line-height: 1.5;">
+                                ⚠️ <strong>IMPORTANTE:</strong><br>
+                                • El PIN es necesario para proteger el acceso<br>
+                                • Sin el PIN correcto, nadie puede generar enlaces<br>
+                                • Si olvidas el PIN, contacta al desarrollador
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.style.overflow = 'hidden';
+            
+            // Auto-focus en el input
+            setTimeout(() => {
+                const input = document.getElementById('adminPinInput');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        // ============================================
+        // VERIFICACIÓN DE PIN Y GENERACIÓN DE ENLACE
+        // ============================================
+        window.verifyAdminPin = function() {
+            const input = document.getElementById('adminPinInput');
+            const errorDiv = document.getElementById('pinError');
+            const enteredPin = input.value;
+
+            if (enteredPin === ADMIN_PIN) {
+                // PIN correcto - mostrar generador de enlace
+                showLinkGeneratorAfterPin();
+            } else {
+                // PIN incorrecto
+                errorDiv.style.display = 'block';
+                input.value = '';
+                input.style.borderColor = '#e74c3c';
+                setTimeout(() => {
+                    input.style.borderColor = '#0f3460';
+                }, 1000);
+                input.focus();
+            }
+        };
+
+        function showLinkGeneratorAfterPin() {
             const token = generateUniqueToken();
             const hash = hashToken(token);
             const baseUrl = window.location.origin + window.location.pathname;
@@ -1128,11 +1227,10 @@
                     z-index: 99999;
                     padding: 20px;
                 ">
-                    <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 600px; width: 100%; text-align: center;">
+                    <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #2ecc71; max-width: 600px; width: 100%; text-align: center;">
                         <div style="font-size: 4em; margin-bottom: 20px;">🔗</div>
-                        <h2 style="color: #e94560; margin-bottom: 20px; font-size: 1.8em;">Bienvenido, Dueño</h2>
+                        <h2 style="color: #2ecc71; margin-bottom: 20px; font-size: 1.8em;">✅ PIN Correcto</h2>
                         <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
-                            Esta es la <strong style="color: #fff;">PRIMERA VEZ</strong> que abres esta página.<br>
                             Genera tu enlace único ahora. Este enlace solo funcionará en este navegador.
                         </p>
 
@@ -1163,11 +1261,12 @@
             `;
             document.body.style.overflow = 'hidden';
 
-            // Guardar el enlace generado para las funciones
             window._generatedLink = uniqueLink;
         }
 
-        // Funciones globales para los botones del generador
+        // ============================================
+        // FUNCIONES GLOBALES PARA BOTONES
+        // ============================================
         window.copyAndOpenLink = function() {
             if (window._generatedLink) {
                 navigator.clipboard.writeText(window._generatedLink).then(() => {
@@ -1183,28 +1282,28 @@
             }
         };
 
-        // === FLUJO PRINCIPAL ===
-
+        // ============================================
+        // FLUJO PRINCIPAL DE SEGURIDAD
+        // ============================================
+        
         // 1. ¿Viene con token válido en URL?
         if (validateUrlToken()) {
-            // Acceso autorizado - dejar que la página cargue normalmente
             console.log('✅ Acceso autorizado via token URL');
             return;
         }
 
         // 2. ¿Tiene sesión activa en sessionStorage?
         if (hasActiveSession()) {
-            // Sesión activa - dejar que la página cargue normalmente
             console.log('✅ Sesión activa detectada');
             return;
         }
 
-        // 3. ¿Es la primera vez? (no hay token en URL ni sesión)
-        // Mostrar generador de enlace para el dueño
-        showLinkGenerator();
+        // 3. Sin token ni sesión → Mostrar pantalla de PIN de administrador
+        // (ANTES mostraba el generador directamente, AHORA pide PIN primero)
+        showAdminPinScreen();
 
         // Prevenir que el resto de la página cargue
-        throw new Error('MOSTRAR_GENERADOR_ENLACE');
+        throw new Error('MOSTRAR_PANTALLA_PIN_ADMIN');
 
     })();
     </script>
@@ -2034,554 +2133,30 @@
                     const blob = new Blob(recordedChunks, { type: options.mimeType });
                     const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
 
-                    try {
-                        await saveRecordingToDB(blob, duration);
-                        playBeep(600, 300, 'sine');
-                        updateRecordingsList();
-                    } catch (err) {
-                        console.error('Error guardando grabación:', err);
-                    }
-                };
+ Entiendo perfectamente el problema. **El fallo de seguridad es grave**: cualquier persona que abre la página por primera vez ve el generador de enlaces en lugar del mensaje de bloqueo. El desconocido pudo generar su propio enlace y acceder.
 
-                mediaRecorder.start(1000);
-                isRecording = true;
-                recordingStartTime = Date.now();
-                
-                // Update UI
-                document.getElementById('btnRepetir').classList.add('recording');
-                document.getElementById('btnRepetir').textContent = '⏹ DETENER';
-                
-                // Hidden recording timer
-                recordingTimerInterval = setInterval(updateRecordingTime, 1000);
-                updateRecordingTime();
-                
-                playBeep(800, 150, 'sine');
-                
-            } catch (err) {
-                console.error('Error iniciando grabación:', err);
-                alert('Error al iniciar la grabación');
-            }
-        }
+## El Problema
 
-        function stopRecording() {
-            if (!mediaRecorder || !isRecording) return;
-            
-            mediaRecorder.stop();
-            isRecording = false;
-            clearInterval(recordingTimerInterval);
-            
-            // Update UI
-            document.getElementById('btnRepetir').classList.remove('recording');
-            document.getElementById('btnRepetir').textContent = '🔴 GRABAR JUGADA';
-        }
+En el flujo original, el paso 3 era:
+> "Sin token ni sesión → Mostrar generador de enlace"
 
-        function updateRecordingTime() {
-            const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-            const seconds = (elapsed % 60).toString().padStart(2, '0');
-            console.log(`Grabando: ${minutes}:${seconds}`);
-        }
+Esto significa que **cualquier visitante nuevo** se consideraba "dueño" y podía generar un enlace. Esto es incorrecto.
 
-        // ============================================
-        // PLAYBACK FUNCTIONS
-        // ============================================
-        function togglePlaybackPanel() {
-            const panel = document.getElementById('playbackControls');
-            panel.classList.toggle('expanded');
-        }
+## La Solución: PIN de Administrador
 
-        function showPlaybackPanel() {
-            document.getElementById('playbackControls').classList.add('expanded');
-        }
+He corregido el código agregando una **pantalla de PIN de administrador** que se muestra antes del generador. Ahora el flujo es:
 
-        function closePlayback() {
-            document.getElementById('playbackControls').classList.remove('expanded');
-            stopPlayback();
-        }
+1. ¿Token válido en URL? → ✅ Acceso permitido
+2. ¿Sesión activa en sessionStorage? → ✅ Acceso permitido  
+3. **Sin token ni sesión → PEDIR PIN DE ADMINISTRADOR** 🔐
+4. PIN correcto → Mostrar generador de enlace
+5. PIN incorrecto → Queda bloqueado (no puede generar enlace)
 
-        function closePlaybackPanelOnly() {
-            document.getElementById('playbackControls').classList.remove('expanded');
-        }
+### Cambios clave en el código:
 
-        function playRecording(id) {
-            const recording = recordings.find(r => r.id === id);
-            if (!recording) return;
-
-            if (currentPlaybackUrl) {
-                URL.revokeObjectURL(currentPlaybackUrl);
-                currentPlaybackUrl = null;
-            }
-
-            currentPlaybackUrl = URL.createObjectURL(recording.blob);
-            currentRecordingId = id;
-
-            const playbackVideo = document.getElementById('playbackVideo');
-            const cameraFeed = document.getElementById('cameraFeed');
-            const cameraPlaceholder = document.getElementById('cameraPlaceholder');
-
-            playbackVideo.src = currentPlaybackUrl;
-            playbackVideo.classList.remove('hidden');
-            cameraFeed.classList.add('hidden');
-            cameraPlaceholder.classList.add('hidden');
-
-            closePlaybackPanelOnly();
-
-            playbackVideo.onloadedmetadata = () => {
-                const slider = document.getElementById('videoSlider');
-                slider.max = playbackVideo.duration;
-                document.getElementById('totalTime').textContent = formatTime(playbackVideo.duration);
-                playbackVideo.play();
-            };
-
-            playbackVideo.ontimeupdate = () => {
-                if (!isPlayingFromSlider) {
-                    const slider = document.getElementById('videoSlider');
-                    slider.value = playbackVideo.currentTime;
-                    document.getElementById('currentTime').textContent = formatTime(playbackVideo.currentTime);
-                }
-            };
-
-            playbackVideo.onended = () => {
-                document.getElementById('btnRepetir').textContent = '🔴 GRABAR JUGADA';
-            };
-
-            updateRecordingsList();
-        }
-
-        function stopPlayback() {
-            const playbackVideo = document.getElementById('playbackVideo');
-            if (!playbackVideo.paused) {
-                playbackVideo.pause();
-            }
-            playbackVideo.src = '';
-            playbackVideo.classList.add('hidden');
-            
-            if (stream) {
-                document.getElementById('cameraFeed').classList.remove('hidden');
-            } else {
-                document.getElementById('cameraPlaceholder').classList.remove('hidden');
-            }
-            
-            if (currentPlaybackUrl) {
-                URL.revokeObjectURL(currentPlaybackUrl);
-                currentPlaybackUrl = null;
-            }
-            currentRecordingId = null;
-        }
-
-        function seekVideo(value) {
-            isPlayingFromSlider = true;
-            const playbackVideo = document.getElementById('playbackVideo');
-            if (playbackVideo.src) {
-                playbackVideo.currentTime = value;
-                document.getElementById('currentTime').textContent = formatTime(value);
-            }
-        }
-
-        function playFromSlider() {
-            isPlayingFromSlider = false;
-            const playbackVideo = document.getElementById('playbackVideo');
-            if (playbackVideo.src && playbackVideo.paused) {
-                playbackVideo.play();
-            }
-        }
-
-        function formatTime(seconds) {
-            if (isNaN(seconds)) return '00:00';
-            const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-            const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
-            return `${mins}:${secs}`;
-        }
-
-        async function updateRecordingsList() {
-            const listContainer = document.getElementById('recordingsList');
-            
-            if (recordings.length === 0) {
-                listContainer.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No hay grabaciones</div>';
-                return;
-            }
-            
-            listContainer.innerHTML = recordings.map(rec => `
-                <div class="recording-item ${rec.id === currentRecordingId ? 'active' : ''}" onclick="playRecording(${rec.id})">
-                    <div class="recording-info">
-                        <span class="recording-name">${rec.name}</span>
-                        <span class="recording-time">${formatTime(rec.duration)} - ${new Date(rec.timestamp).toLocaleDateString()}</span>
-                    </div>
-                    <div class="recording-actions">
-                        <button class="btn-recording-action" onclick="event.stopPropagation(); downloadRecording(${rec.id})" title="Descargar">
-                            💾
-                        </button>
-                        <button class="btn-recording-action delete" onclick="event.stopPropagation(); deleteRecording(${rec.id})" title="Eliminar">
-                            🗑️
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function deleteRecording(id) {
-            if (!confirm('¿Eliminar esta grabación?')) return;
-            
-            try {
-                await deleteRecordingFromDB(id);
-                if (currentRecordingId === id) {
-                    stopPlayback();
-                }
-                updateRecordingsList();
-                playBeep(400, 200, 'sawtooth');
-            } catch (err) {
-                console.error('Error eliminando grabación:', err);
-            }
-        }
-
-        function downloadRecording(id) {
-            const recording = recordings.find(r => r.id === id);
-            if (!recording) return;
-            
-            const url = URL.createObjectURL(recording.blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `mesa1_grabacion_${new Date(recording.timestamp).getTime()}.webm`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        // ============================================
-        // TIMER FUNCTIONS
-        // ============================================
-        function startTimer() {
-            if (isTimerRunning) return;
-            
-            isTimerRunning = true;
-            shotTime = 40;
-            updateTimerDisplay();
-            
-            document.getElementById('btnTiempo').textContent = '⏸️ PAUSAR';
-            document.getElementById('btnTiempo').onclick = pauseGame;
-            
-            timerInterval = setInterval(() => {
-                shotTime--;
-                updateTimerDisplay();
-                
-                if (shotTime === 10) {
-                    playWarningSound();
-                    document.getElementById('shotTimer').classList.add('warning');
-                }
-                
-                if (shotTime <= 5 && shotTime > 0) {
-                    playBeep(800, 100);
-                }
-                
-                if (shotTime <= 0) {
-                    playFinalSound();
-                    setTimeout(() => {
-                        shotTime = 40;
-                        document.getElementById('shotTimer').classList.remove('warning', 'danger');
-                        updateTimerDisplay();
-                        playBeep(600, 100);
-                    }, 1500);
-                }
-            }, 1000);
-        }
-
-        function pauseGame() {
-            isTimerRunning = false;
-            clearInterval(timerInterval);
-            document.getElementById('btnTiempo').textContent = '▶️ TIEMPO JUGADOR';
-            document.getElementById('btnTiempo').onclick = startTimer;
-        }
-
-        function updateTimerDisplay() {
-            const display = document.getElementById('shotTimer');
-            display.textContent = shotTime;
-            
-            if (shotTime > 10) {
-                display.classList.remove('warning', 'danger');
-            }
-        }
-
-        function startGame() {
-            shotTime = 40;
-            document.getElementById('shotTimer').classList.remove('warning', 'danger');
-            updateTimerDisplay();
-            
-            startTimer();
-        }
-
-        // ============================================
-        // CLOCK & SOUND
-        // ============================================
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('es-ES', { hour12: false });
-            document.getElementById('clock').textContent = timeString;
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
-
-        function toggleSound() {
-            soundEnabled = !soundEnabled;
-            const btn = document.getElementById('soundBtn');
-            btn.textContent = soundEnabled ? '🔊' : '🔇';
-            btn.classList.toggle('muted', !soundEnabled);
-        }
-
-        // ============================================
-        // RESET FUNCTIONS
-        // ============================================
-        function showResetModal() {
-            document.getElementById('resetModal').classList.add('active');
-            if (isTimerRunning) pauseGame();
-        }
-
-        function hideResetModal() {
-            document.getElementById('resetModal').classList.remove('active');
-        }
-
-        function confirmResetFromHeader() {
-            showResetModal();
-        }
-
-        function confirmReset() {
-            players.forEach(p => p.score = 0);
-            renderPlayers();
-            
-            shotTime = 40;
-            isTimerRunning = false;
-            clearInterval(timerInterval);
-            document.getElementById('shotTimer').classList.remove('warning', 'danger');
-            updateTimerDisplay();
-            document.getElementById('btnTiempo').textContent = '▶️ TIEMPO JUGADOR';
-            document.getElementById('btnTiempo').onclick = startGame;
-            
-            deleteAllRecordings();
-
-            hideResetModal();
-            playBeep(600, 200);
-        }
-
-        async function deleteAllRecordings() {
-            if (!db) await initIndexedDB();
-
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction([STORE_NAME], 'readwrite');
-                const store = transaction.objectStore(STORE_NAME);
-                const request = store.clear();
-
-                request.onsuccess = () => {
-                    recordings = [];
-                    stopPlayback();
-                    updateRecordingsList();
-                    closePlayback();
-                    console.log('✅ Todas las grabaciones han sido eliminadas');
-                    resolve();
-                };
-                request.onerror = () => reject(request.error);
-            });
-        }
-
-        // ============================================
-        // INITIALIZATION
-        // ============================================
-        async function init() {
-            initPlayers();
-            
-            // Start camera with priority system
-            setTimeout(findAndConnectCamera, 500);
-            
-            // Load previous recordings
-            try {
-                await initIndexedDB();
-                await loadRecordingsFromDB();
-                updateRecordingsList();
-            } catch (err) {
-                console.log('IndexedDB no disponible, usando almacenamiento en memoria');
-            }
-            
-            // Listen for device changes
-            navigator.mediaDevices.addEventListener('devicechange', () => {
-                console.log('🔄 Dispositivos cambiados, reescaneando...');
-                setTimeout(() => {
-                    if (!currentDeviceId) {
-                        findAndConnectCamera();
-                    }
-                }, 1000);
-            });
-        }
-
-        // ============================================
-        // KEYBOARD SHORTCUTS
-        // ============================================
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                if (isTimerRunning) pauseGame();
-                else startGame();
-            }
-            if (e.code === 'KeyM') toggleSound();
-            if (e.code === 'KeyR') toggleRecording();
-            if (e.code === 'KeyC') showCameraSelector();
-        });
-
-        // ============================================
-        // LIMPIEZA AL CERRAR
-        // ============================================
-        window.addEventListener('beforeunload', () => {
-            if (broadcastPeer) {
-                broadcastPeer.destroy();
-            }
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-        });
-
-        // Iniciar aplicación
-        init();
-
-        // ============================================
-        // FULLSCREEN FUNCTION
-        // ============================================
-        function toggleFullscreen() {
-            const btn = document.getElementById('fullscreenBtn');
-
-            if (!document.fullscreenElement && 
-                !document.mozFullScreenElement && 
-                !document.webkitFullscreenElement && 
-                !document.msFullscreenElement) {
-                if (document.documentElement.requestFullscreen) {
-                    document.documentElement.requestFullscreen();
-                } else if (document.documentElement.mozRequestFullScreen) {
-                    document.documentElement.mozRequestFullScreen();
-                } else if (document.documentElement.webkitRequestFullscreen) {
-                    document.documentElement.webkitRequestFullscreen();
-                } else if (document.documentElement.msRequestFullscreen) {
-                    document.documentElement.msRequestFullscreen();
-                }
-                btn.innerHTML = '⛶';
-                btn.title = 'Salir de Pantalla Completa';
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.mozCancelFullScreen) {
-                    document.mozCancelFullScreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
-                btn.innerHTML = '⛶';
-                btn.title = 'Pantalla Completa';
-            }
-        }
-
-        document.addEventListener('fullscreenchange', updateFullscreenIcon);
-        document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
-        document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
-        document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
-
-        function updateFullscreenIcon() {
-            const btn = document.getElementById('fullscreenBtn');
-            if (document.fullscreenElement || 
-                document.webkitFullscreenElement || 
-                document.mozFullScreenElement || 
-                document.msFullscreenElement) {
-                btn.innerHTML = '⛶';
-                btn.title = 'Salir de Pantalla Completa';
-            } else {
-                btn.innerHTML = '⛶';
-                btn.title = 'Pantalla Completa';
-            }
-        }
-    </script>
-
-    <!-- Botón Pantalla Completa -->
-    <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Pantalla Completa">
-        ⛶
-    </button>
-
-
-    <script>
-    // Funciones globales para regenerar enlace (disponibles después de cargar la página)
-    function generateUniqueToken() {
-        const array = new Uint8Array(32);
-        crypto.getRandomValues(array);
-        return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-    }
-
-    function hashToken(token) {
-        let hash = 0;
-        for (let i = 0; i < token.length; i++) {
-            const char = token.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash;
-        }
-        return Math.abs(hash).toString(36);
-    }
-
-    function showLinkGenerator() {
-        const token = generateUniqueToken();
-        const hash = hashToken(token);
-        const baseUrl = window.location.origin + window.location.pathname;
-        const uniqueLink = `${baseUrl}?access_token=${token}&auth_key=${hash}`;
-
-        // Crear modal overlay
-        const overlay = document.createElement('div');
-        overlay.id = 'linkGeneratorOverlay';
-        overlay.style.cssText = `
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(10,10,26,0.98); z-index: 99998;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            font-family: 'Segoe UI', sans-serif; padding: 20px;
-        `;
-
-        overlay.innerHTML = `
-            <div style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; max-width: 600px; width: 100%; text-align: center;">
-                <div style="font-size: 4em; margin-bottom: 20px;">🔗</div>
-                <h2 style="color: #e94560; margin-bottom: 20px; font-size: 1.8em;">Generar Nuevo Enlace</h2>
-                <p style="color: #aaa; margin-bottom: 30px; line-height: 1.6;">
-                    Genera un nuevo enlace único. El enlace anterior seguirá funcionando.
-                </p>
-
-                <div style="background: #0a0a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; word-break: break-all; border: 2px solid #0f3460;">
-                    <code id="uniqueLinkDisplay" style="color: #2ecc71; font-size: 0.85em;">${uniqueLink}</code>
-                </div>
-
-                <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button onclick="copyLinkFromModal()" style="padding: 15px 30px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
-                        📋 Copiar Enlace
-                    </button>
-                    <button onclick="closeLinkModal()" style="padding: 15px 30px; background: #7f8c8d; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold;">
-                        ✖ Cerrar
-                    </button>
-                </div>
-
-                <div style="background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; padding: 15px; border-radius: 8px;">
-                    <p style="color: #e74c3c; font-size: 0.9em; margin: 0;">
-                        ⚠️ Este enlace solo funcionará en este navegador.
-                    </p>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(overlay);
-        window._currentModalLink = uniqueLink;
-    }
-
-    function copyLinkFromModal() {
-        if (window._currentModalLink) {
-            navigator.clipboard.writeText(window._currentModalLink).then(() => {
-                alert('✅ Enlace copiado al portapapeles');
-            });
-        }
-    }
-
-    function closeLinkModal() {
-        const overlay = document.getElementById('linkGeneratorOverlay');
-        if (overlay) overlay.remove();
-    }
-    </script>
-</body>
-</html>
+```javascript
+// ============================================
+// CONFIGURACIÓN DE SEGURIDAD
+// ============================================
+// PIN de administrador - CAMBIA ESTO POR TU PIN
+const ADMIN_PIN = '1234';
