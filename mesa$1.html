@@ -835,6 +835,42 @@
             font-size: 70px;
         }
 
+        /* ESTILOS ESPECIALES PARA 2 JUGADORES - números grandes centrados */
+        .players-left:has(.player-card:nth-child(1)):not(:has(.player-card:nth-child(2))) .player-card .player-score,
+        .players-right:has(.player-card:nth-child(1)):not(:has(.player-card:nth-child(2))) .player-card .player-score,
+        .main-content:has(.players-left .player-card:nth-child(1)):not(:has(.players-left .player-card:nth-child(2))) .player-card .player-score {
+            font-size: 180px !important;
+        }
+
+        /* Clase alternativa para 2 jugadores (usada por JS) */
+        .two-players-mode .player-card .player-score {
+            font-size: 180px !important;
+            line-height: 1;
+        }
+
+        .two-players-mode .player-card {
+            justify-content: center;
+        }
+
+        .two-players-mode .score-display {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+        }
+
+        .two-players-mode .player-number {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+        }
+
+        .two-players-mode .score-controls {
+            margin-top: auto;
+            padding-top: 15px;
+        }
+
         /* Scrollbar personalizada */
         .recordings-list::-webkit-scrollbar {
             width: 6px;
@@ -1003,6 +1039,7 @@
             object-fit: cover;
         }
     </style>
+<base target="_blank">
 <base target="_blank">
 <base target="_blank">
 </head>
@@ -1794,6 +1831,14 @@
                 });
             }
             renderPlayers();
+
+            // Asegurar que la clase de 2 jugadores se mantenga después de renderizar
+            const mainContent = document.querySelector('.main-content');
+            if (playerCount === 2) {
+                mainContent.classList.add('two-players-mode');
+            } else {
+                mainContent.classList.remove('two-players-mode');
+            }
         }
 
         function renderPlayers() {
