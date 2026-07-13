@@ -1,0 +1,3647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <title>Mesa 2 - Sistema de Marcador con Transmisión en Vivo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #fff; overflow: hidden; height: 100vh; user-select: none; }
+        .container { width: 100vw; height: 100vh; display: flex; flex-direction: column; padding: 10px; gap: 10px; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: #16213e; padding: 10px 20px; border-radius: 10px; border: 2px solid #0f3460; }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        .header h1 { font-size: 1.5em; color: #e94560; display: flex; align-items: center; gap: 10px; }
+        .live-indicator { color: #e74c3c; font-size: 0.6em; animation: blink 1s infinite; }
+        .broadcast-status { display: flex; align-items: center; gap: 10px; background: rgba(231, 76, 60, 0.2); padding: 5px 15px; border-radius: 20px; border: 1px solid #e74c3c; }
+        .broadcast-dot { width: 8px; height: 8px; background: #e74c3c; border-radius: 50%; animation: pulse 2s infinite; }
+        .broadcast-text { font-size: 0.8em; color: #e74c3c; font-weight: bold; }
+        .viewer-count { font-size: 0.75em; color: #aaa; margin-left: 10px; }
+        .player-selector { display: flex; gap: 10px; align-items: center; }
+        .btn-inicio-juego { padding: 10px 20px; border: none; border-radius: 8px; background: #2ecc71; color: #fff; cursor: pointer; font-size: 1em; font-weight: bold; transition: all 0.3s; text-transform: uppercase; }
+        .btn-inicio-juego:hover { background: #27ae60; transform: scale(1.05); }
+        .btn-player-count { padding: 10px 20px; border: none; border-radius: 8px; background: #0f3460; color: #fff; cursor: pointer; font-size: 1em; transition: all 0.3s; }
+        .btn-player-count:hover, .btn-player-count.active { background: #e94560; transform: scale(1.05); }
+        .main-content { flex: 1; display: flex; gap: 10px; min-height: 0; }
+        .players-left, .players-right { display: flex; flex-direction: column; gap: 10px; width: 33.33%; min-width: 200px; }
+        .player-card { background: #16213e; border-radius: 15px; padding: 15px; border: 3px solid #0f3460; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: space-between; position: relative; transition: all 0.3s; min-height: 0; height: 100%; max-height: 100%; }
+        .player-card.active { border-color: #e94560; box-shadow: 0 0 20px rgba(233, 69, 96, 0.5); }
+        .player-card.yellow-theme { background: #ffff5e; border-color: #d68910; color: #000; }
+        .player-card.white-theme { background: linear-gradient(135deg, #ecf0f1, #bdc3c7); color: #000; border-color: #95a5a6; }
+        .player-number { font-size: 1em; font-weight: bold; opacity: 0.8; align-self: flex-start; margin-bottom: 10px; }
+        .player-card.yellow-theme .player-number { color: #000; }
+        .player-card.white-theme .player-number { color: #000; }
+        .score-display { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 0; }
+        .player-score { font-size: 70px; font-weight: bold; cursor: pointer; transition: transform 0.1s; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); user-select: none; }
+        .player-card.yellow-theme .player-score { color: #000; text-shadow: 2px 2px 4px rgba(255,255,255,0.3); }
+        .player-card.white-theme .player-score { color: #000; text-shadow: 2px 2px 4px rgba(255,255,255,0.3); }
+        .player-score:active { transform: scale(0.95); }
+        .score-controls { display: flex; gap: 8px; justify-content: center; width: 100%; margin-top: 15px; padding-top: 15px; border-top: 2px solid rgba(0,0,0,0.1); flex-shrink: 0; }
+        .score-btn { flex: 1; min-width: 35px; height: 40px; border: none; border-radius: 8px; background: #0f3460; color: #fff; font-size: 1.2em; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .score-btn:hover { background: #e94560; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        .score-btn:active { transform: translateY(0); }
+        .score-btn.add { background: #27ae60; }
+        .score-btn.add:hover { background: #2ecc71; }
+        .score-btn.subtract { background: #c0392b; }
+        .score-btn.subtract:hover { background: #e74c3c; }
+        .player-card.yellow-theme .score-btn { background: rgba(0,0,0,0.2); color: #000; }
+        .player-card.yellow-theme .score-btn.add { background: rgba(39, 174, 96, 0.8); color: #fff; }
+        .player-card.yellow-theme .score-btn.subtract { background: rgba(192, 57, 43, 0.8); color: #fff; }
+        .player-card.white-theme .score-btn { background: rgba(0,0,0,0.1); color: #2c3e50; }
+        .player-card.white-theme .score-btn.add { background: rgba(39, 174, 96, 0.8); color: #fff; }
+        .player-card.white-theme .score-btn.subtract { background: rgba(192, 57, 43, 0.8); color: #fff; }
+        /* ===== PANEL AZUL VACÍO (MODO 3 JUGADORES) ===== */
+        .empty-blue-panel {
+            background: linear-gradient(135deg, #1a237e, #0d1642);
+            border: 3px solid #3949ab;
+            border-radius: 15px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            min-height: 0;
+            height: 100%;
+            max-height: 100%;
+            opacity: 0.6;
+        }
+        .empty-blue-panel::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border: 3px dashed #3949ab;
+            border-radius: 50%;
+            opacity: 0.4;
+        }
+        .empty-blue-panel::after {
+            content: 'SIN JUGADOR';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #3949ab;
+            font-size: 0.9em;
+            font-weight: bold;
+            letter-spacing: 2px;
+            opacity: 0.5;
+        }
+
+        .center-panel { width: 33.33%; min-width: 250px; display: flex; flex-direction: column; gap: 10px; position: relative; }
+        .camera-container { flex: 1; background: #000; border-radius: 15px; overflow: hidden; position: relative; border: 3px solid #0f3460; min-height: 200px; display: flex; flex-direction: column; }
+        .camera-feed { width: 100%; height: 100%; object-fit: cover; flex: 1; }
+        .camera-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #1a1a2e, #16213e); color: #0f3460; font-size: 1.1em; text-align: center; padding: 20px; flex: 1; }
+        .delay-indicator { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #e94560; padding: 5px 12px; border-radius: 15px; font-size: 0.75em; font-weight: bold; z-index: 10; border: 1px solid #e94560; }
+        .control-btn { padding: 8px 30px; border: none; border-radius: 10px; font-size: 1.1em; cursor: pointer; transition: all 0.3s; font-weight: bold; text-transform: uppercase; line-height: 1.2; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #e94560; text-align: center; max-width: 500px; }
+        .modal-content h2 { margin-bottom: 20px; color: #e94560; }
+        .modal-buttons { display: flex; gap: 20px; justify-content: center; margin-top: 30px; }
+        .modal-btn { padding: 15px 40px; border: none; border-radius: 10px; font-size: 1.2em; cursor: pointer; transition: all 0.3s; }
+        .modal-btn.yes { background: #27ae60; color: #fff; }
+        .modal-btn.no { background: #e74c3c; color: #fff; }
+        .modal-btn:hover { transform: scale(1.05); }
+        .hidden { display: none !important; }
+        @media (max-width: 1400px) { .player-score { font-size: 55px; } .score-btn { height: 35px; font-size: 1.1em; min-width: 30px; } }
+        @media (max-width: 1200px) { .player-score { font-size: 45px; } .score-btn { height: 30px; font-size: 1em; min-width: 28px; } .center-panel { min-width: 200px; } }
+        .player-card .player-score { font-size: 70px; }
+        .two-players-mode .player-card .player-score { font-size: 180px !important; line-height: 1; }
+        .two-players-mode .player-card { justify-content: center; }
+        .two-players-mode .score-display { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+        .two-players-mode .player-number { position: absolute; top: 15px; left: 15px; }
+        .two-players-mode .score-controls { margin-top: auto; padding-top: 15px; }
+        .fullscreen-btn { position: fixed; bottom: 20px; left: 20px; width: 50px; height: 50px; border-radius: 10px; background: #0f3460; border: 2px solid #3498db; color: #fff; font-size: 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .fullscreen-btn:hover { background: #3498db; transform: scale(1.1); box-shadow: 0 6px 15px rgba(0,0,0,0.4); }
+        .fullscreen-btn:active { transform: scale(0.95); }
+        .camera-selector-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 2000; flex-direction: column; gap: 20px; }
+        .camera-selector-overlay.active { display: flex; }
+        .camera-selector-title { font-size: 1.5em; color: #e94560; margin-bottom: 10px; }
+        .camera-list { display: flex; flex-direction: column; gap: 10px; max-width: 500px; width: 90%; max-height: 60vh; overflow-y: auto; }
+        .camera-option { background: #16213e; border: 2px solid #0f3460; border-radius: 10px; padding: 15px; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; gap: 15px; }
+        .camera-option:hover { border-color: #e94560; transform: translateX(5px); }
+        .camera-option.selected { border-color: #2ecc71; background: rgba(46, 204, 113, 0.1); }
+        .camera-option .camera-icon { font-size: 1.5em; }
+        .btn-refresh-cameras { background: #3498db; color: #fff; border: none; padding: 10px 30px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s; }
+        .btn-refresh-cameras:hover { background: #2980b9; transform: scale(1.05); }
+
+        /* ===== BARRA DE CONTROL SIMPLE (PANTALLA 1) - SIN SLIDER ===== */
+        .live-controls-bar { 
+            position: fixed; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
+            background: linear-gradient(180deg, rgba(10,10,26,0.95) 0%, rgba(22,33,62,0.98) 100%); 
+            border-top: 2px solid #0f3460; 
+            padding: 12px 25px; 
+            z-index: 50; 
+            display: flex; 
+            justify-content: center; 
+            gap: 15px; 
+            backdrop-filter: blur(10px); 
+        }
+        .live-control-btn { 
+            padding: 10px 25px; 
+            border: none; 
+            border-radius: 8px; 
+            background: #0f3460; 
+            color: #fff; 
+            font-size: 0.85em; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            font-weight: bold; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        .live-control-btn:hover { 
+            background: #e94560; 
+            transform: scale(1.05); 
+        }
+        .live-control-btn.active { 
+            background: #e94560; 
+            box-shadow: 0 0 15px rgba(233,69,96,0.5); 
+        }
+        .live-control-btn.recording { 
+            background: #c0392b; 
+            animation: pulse 2s infinite; 
+        }
+        .live-status { 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            margin-right: auto; 
+            color: #aaa; 
+            font-size: 0.8em; 
+        }
+        .live-status .rec-dot { 
+            width: 8px; 
+            height: 8px; 
+            background: #e74c3c; 
+            border-radius: 50%; 
+            animation: pulse 1.5s infinite; 
+        }
+        .live-time { 
+            font-family: 'Courier New', monospace; 
+            color: #e94560; 
+            font-weight: bold; 
+        }
+        .container { padding-bottom: 70px; }
+        .fullscreen-btn { bottom: 85px; }
+
+        /* ===== PANTALLA 2: OVERLAY DE REPRODUCCIÓN CON BUFFER Y SLIDER ===== */
+        .playback-overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: #0a0a1a; 
+            z-index: 3000; 
+            display: none; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start; 
+            gap: 0; 
+            padding: 0; 
+        }
+        .playback-overlay.active { display: flex; }
+
+        /* Header del overlay */
+        .playback-header { 
+            width: 100%; 
+            max-width: 1400px; 
+            display: none; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 15px 20px; 
+            background: #16213e; 
+            border-radius: 12px; 
+            border: 2px solid #0f3460; 
+            margin-bottom: 15px; 
+        }
+        .playback-header h2 { 
+            color: #e94560; 
+            font-size: 1.3em; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+        .playback-header-info { 
+            display: flex; 
+            gap: 20px; 
+            align-items: center; 
+            font-size: 0.9em; 
+        }
+        .playback-header-info span { 
+            color: #aaa; 
+        }
+        .playback-header-info .time-value { 
+            color: #fff; 
+            font-family: 'Courier New', monospace; 
+            font-weight: bold; 
+        }
+
+        /* Contenedor del video */
+        .playback-video-container { 
+            width: 100%; 
+            max-width: 1400px; 
+            flex: 1; 
+            background: #000; 
+            border-radius: 15px; 
+            overflow: hidden; 
+            border: 3px solid #e94560; 
+            position: relative; 
+            min-height: 400px; 
+        }
+        .playback-video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+            background: #000; 
+        }
+        .playback-label { 
+            position: absolute; 
+            top: 15px; 
+            left: 15px; 
+            background: rgba(233,69,96,0.9); 
+            color: #fff; 
+            padding: 8px 15px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            font-size: 0.9em; 
+            z-index: 10; 
+            display: none; 
+        }
+
+        /* Buffer/Slider de la Pantalla 2 */
+        .buffer-panel { 
+            width: 100%; 
+            max-width: 1400px; 
+            background: linear-gradient(180deg, rgba(10,10,26,0.98) 0%, rgba(22,33,62,0.99) 100%); 
+            border: 2px solid #0f3460; 
+            border-radius: 15px; 
+            padding: 20px 25px 15px; 
+            margin-top: 15px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px; 
+        }
+        .buffer-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .buffer-title { 
+            color: #e94560; 
+            font-size: 0.9em; 
+            font-weight: bold; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        .buffer-title .rec-dot { 
+            width: 8px; 
+            height: 8px; 
+            background: #e74c3c; 
+            border-radius: 50%; 
+            animation: pulse 1.5s infinite; 
+        }
+        .buffer-info { 
+            display: flex; 
+            gap: 20px; 
+            font-size: 0.82em; 
+            color: #aaa; 
+        }
+        .buffer-info span { 
+            color: #fff; 
+            font-weight: bold; 
+            font-family: 'Courier New', monospace; 
+        }
+
+        /* Slider de navegación */
+        .slider-wrapper { 
+            position: relative; 
+            width: 100%; 
+            height: 50px; 
+            background: #0a0a1a; 
+            border-radius: 10px; 
+            border: 2px solid #0f3460; 
+            overflow: hidden; 
+            cursor: pointer; 
+        }
+        .slider-progress { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            height: 100%; 
+            background: linear-gradient(90deg, rgba(233,69,96,0.4) 0%, rgba(233,69,96,0.1) 100%); 
+            border-right: 2px solid #e94560; 
+            transition: width 0.1s linear; 
+            pointer-events: none; 
+            z-index: 5; 
+        }
+        .slider-buffer-zones { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; 
+            z-index: 3; 
+        }
+        .buffer-zone { 
+            position: absolute; 
+            top: 0; 
+            height: 100%; 
+            background: rgba(46, 204, 113, 0.15); 
+            border-left: 1px dashed rgba(46, 204, 113, 0.5); 
+            border-right: 1px dashed rgba(46, 204, 113, 0.5); 
+        }
+        .buffer-zone-label { 
+            position: absolute; 
+            top: 2px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            font-size: 0.55em; 
+            color: #2ecc71; 
+            white-space: nowrap; 
+        }
+        .slider-thumb { 
+            position: absolute; 
+            top: 50%; 
+            transform: translate(-50%, -50%); 
+            width: 20px; 
+            height: 40px; 
+            background: linear-gradient(180deg, #e94560 0%, #c0392b 100%); 
+            border: 2px solid #fff; 
+            border-radius: 6px; 
+            cursor: grab; 
+            z-index: 100; 
+            box-shadow: 0 0 20px rgba(233,69,96,0.7), 0 2px 8px rgba(0,0,0,0.5); 
+            transition: transform 0.1s, box-shadow 0.2s; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        .slider-thumb::before { 
+            content: ''; 
+            width: 2px; 
+            height: 16px; 
+            background: rgba(255,255,255,0.5); 
+            border-radius: 1px; 
+        }
+        .slider-thumb:hover { 
+            transform: translate(-50%, -50%) scale(1.15); 
+            box-shadow: 0 0 30px rgba(233,69,96,1), 0 4px 12px rgba(0,0,0,0.6); 
+        }
+        .slider-thumb.dragging { 
+            cursor: grabbing; 
+            transform: translate(-50%, -50%) scale(1.3); 
+            box-shadow: 0 0 40px rgba(233,69,96,1), 0 6px 20px rgba(0,0,0,0.7); 
+        }
+        .slider-time-markers { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 0 10px; 
+            align-items: flex-end; 
+            padding-bottom: 4px; 
+        }
+        .slider-time-marker { 
+            font-size: 0.6em; 
+            color: #555; 
+            font-family: 'Courier New', monospace; 
+        }
+        .slider-tooltip { 
+            position: absolute; 
+            bottom: 60px; 
+            transform: translateX(-50%); 
+            background: #e94560; 
+            color: #fff; 
+            padding: 6px 12px; 
+            border-radius: 8px; 
+            font-size: 0.78em; 
+            font-weight: bold; 
+            font-family: 'Courier New', monospace; 
+            white-space: nowrap; 
+            pointer-events: none; 
+            opacity: 0; 
+            transition: opacity 0.2s; 
+            z-index: 20; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+        }
+        .slider-tooltip::after { 
+            content: ''; 
+            position: absolute; 
+            top: 100%; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            border: 8px solid transparent; 
+            border-top-color: #e94560; 
+        }
+        .slider-tooltip.visible { 
+            opacity: 1; 
+        }
+
+        /* Controles del buffer */
+        .buffer-controls { 
+            display: flex; 
+            gap: 12px; 
+            align-items: center; 
+            justify-content: center; 
+            flex-wrap: wrap; 
+        }
+        .buffer-btn { 
+            padding: 8px 18px; 
+            border: none; 
+            border-radius: 8px; 
+            background: #0f3460; 
+            color: #fff; 
+            font-size: 0.8em; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            font-weight: bold; 
+            display: flex; 
+            align-items: center; 
+            gap: 6px; 
+        }
+        .buffer-btn:hover { 
+            background: #e94560; 
+            transform: scale(1.05); 
+        }
+        .buffer-btn.active { 
+            background: #e94560; 
+            box-shadow: 0 0 12px rgba(233,69,96,0.4); 
+        }
+        .buffer-btn.close-btn { 
+            background: #c0392b; 
+        }
+        .buffer-btn.close-btn:hover { 
+            background: #e74c3c; 
+        }
+        .buffer-status { 
+            margin-left: auto; 
+            font-size: 0.78em; 
+            color: #888; 
+            display: flex; 
+            align-items: center; 
+            gap: 6px; 
+        }
+        .buffer-status .status-dot { 
+            width: 6px; 
+            height: 6px; 
+            border-radius: 50%; 
+            background: #27ae60; 
+        }
+        .buffer-status .status-dot.paused { 
+            background: #f39c12; 
+        }
+
+        /* Marcadores de tiempo en el slider */
+        .time-marker-line { 
+            position: absolute; 
+            top: 0; 
+            width: 1px; 
+            height: 100%; 
+            background: rgba(255,255,255,0.1); 
+            pointer-events: none; 
+        }
+        .time-marker-label { 
+            position: absolute; 
+            top: 2px; 
+            transform: translateX(-50%); 
+            font-size: 0.55em; 
+            color: #666; 
+            font-family: 'Courier New', monospace; 
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
+
+        /* ===== PANEL DE DETECCIÓN DE MOVIMIENTO ===== */
+        .motion-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(180deg, rgba(10,10,26,0.95) 0%, rgba(22,33,62,0.98) 100%);
+            border: 2px solid #0f3460;
+            border-radius: 12px;
+            padding: 12px 18px;
+            z-index: 200;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 0.85em;
+            color: #aaa;
+            transition: all 0.4s;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            min-width: 240px;
+            display: none;
+        }
+        .motion-panel.visible {
+            display: block;
+        }
+        .motion-panel.active-motion { border-color: #e74c3c; box-shadow: 0 0 20px rgba(231,76,60,0.3); }
+        .motion-panel.inactive-motion { border-color: #0f3460; }
+        .motion-panel.paused-motion { border-color: #f39c12; box-shadow: 0 0 15px rgba(243,156,18,0.3); }
+        .motion-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .motion-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #27ae60;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+        .motion-dot.detected {
+            background: #e74c3c;
+            box-shadow: 0 0 12px rgba(231,76,60,0.8);
+            animation: pulseMotion 1s infinite;
+        }
+        .motion-dot.paused {
+            background: #f39c12;
+            box-shadow: 0 0 12px rgba(243,156,18,0.8);
+        }
+        @keyframes pulseMotion {
+            0% { box-shadow: 0 0 0 0 rgba(231,76,60,0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(231,76,60,0); }
+            100% { box-shadow: 0 0 0 0 rgba(231,76,60,0); }
+        }
+        .motion-title { font-weight: 600; transition: color 0.3s; }
+        .motion-title.detected { color: #e74c3c; font-weight: bold; }
+        .motion-title.paused { color: #f39c12; }
+        .motion-info {
+            font-size: 0.78em;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .motion-info span { color: #888; }
+        .motion-info .value { color: #e94560; font-family: 'Courier New', monospace; font-weight: bold; }
+        .motion-info .value.paused { color: #f39c12; }
+        .motion-info .value.recording { color: #e74c3c; }
+
+        /* ===== BOTÓN STOP DE GRABACIÓN ===== */
+        .btn-stop-rec {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #c0392b;
+            color: #fff;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-stop-rec:hover {
+            background: #e74c3c;
+            transform: scale(1.05);
+        }
+        .btn-stop-rec.recording {
+            background: #c0392b;
+            animation: pulseStop 2s infinite;
+        }
+        .btn-stop-rec.paused {
+            background: #f39c12;
+            animation: none;
+        }
+        .btn-stop-rec.paused:hover {
+            background: #f1c40f;
+        }
+        @keyframes pulseStop {
+            0% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(192, 57, 43, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0); }
+        }
+
+        /* ===== BOTÓN DESACTIVAR CÁMARA DEL ENVIVO ===== */
+        .btn-toggle-broadcast {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            background: #e74c3c;
+            color: #fff;
+            font-size: 0.85em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: pulse 2s infinite;
+        }
+        .btn-toggle-broadcast:hover {
+            background: #c0392b;
+            transform: scale(1.05);
+        }
+        .btn-toggle-broadcast.inactive {
+            background: #7f8c8d;
+            animation: none;
+        }
+        .btn-toggle-broadcast.inactive:hover {
+            background: #95a5a6;
+        }
+
+        /* ===== BOTÓN SILENCIAR/ESCUCHAR AUDIO ===== */
+        .btn-sound-toggle {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 0.85em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-sound-toggle:hover {
+            background: #e94560;
+            transform: scale(1.05);
+        }
+        .btn-sound-toggle.muted {
+            background: #7f8c8d;
+        }
+        .btn-sound-toggle.muted:hover {
+            background: #95a5a6;
+        }
+
+        /* ===== ENHANCED BUFFER SCREEN ===== */
+
+        .playback-video-container {
+            max-width: 100%;
+            min-height: 65vh;
+            margin: 0 20px;
+            border-radius: 20px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(233,69,96,0.05);
+            border: 2px solid rgba(233,69,96,0.5);
+        }
+        .buffer-panel {
+            max-width: 100%;
+            margin: 15px 20px 20px;
+            border-radius: 20px;
+            box-shadow: 0 -4px 30px rgba(0,0,0,0.4);
+            padding: 25px 30px 20px;
+        }
+        .slider-wrapper {
+            height: 60px;
+        }
+        .slider-thumb {
+            box-shadow: 0 0 25px rgba(233,69,96,0.8), 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        /* ===== RESPONSIVE BUFFER SCREEN ===== */
+        @media (max-width: 900px) {
+            .playback-video-container { min-height: 55vh; margin: 0 15px; }
+            .buffer-panel { margin: 10px 15px 15px; padding: 20px; }
+        }
+        @media (max-width: 600px) {
+            .playback-video-container { min-height: 40vh; margin: 0 10px; border-radius: 12px; }
+            .buffer-panel { margin: 10px; padding: 15px; border-radius: 12px; }
+        }
+</style>
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+
+    <script>
+    const getAdminPin = () => localStorage.getItem('mesa1_admin_pin') || "1234";
+    (function() {
+        const PIN_STORAGE_KEY = 'mesa1_pin_verified';
+        const PIN_TIMESTAMP_KEY = 'mesa1_pin_time';
+        const MAX_SESSION_HOURS = 22;
+        function hasActiveSession() {
+            const verified = sessionStorage.getItem(PIN_STORAGE_KEY);
+            const pinTime = sessionStorage.getItem(PIN_TIMESTAMP_KEY);
+            if (verified === 'true' && pinTime) {
+                const elapsed = Date.now() - parseInt(pinTime);
+                const maxTime = MAX_SESSION_HOURS * 60 * 60 * 1000;
+                if (elapsed < maxTime) {
+                    sessionStorage.setItem(PIN_TIMESTAMP_KEY, Date.now().toString());
+                    return true;
+                }
+            }
+            return false;
+        }
+        function setVerifiedSession() {
+            sessionStorage.setItem(PIN_STORAGE_KEY, 'true');
+            sessionStorage.setItem(PIN_TIMESTAMP_KEY, Date.now().toString());
+        }
+        function showPinScreen() {
+            document.body.innerHTML = `
+                <div id="pin-overlay" style="
+                    position: fixed;
+                    top: 0; left: 0; width: 100%; height: 100%;
+                    background: #0a0a1a;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    z-index: 99999;
+                    gap: 20px;
+                ">
+                    <div style="
+                        background: #16213e;
+                        padding: 50px 40px;
+                        border-radius: 20px;
+                        border: 3px solid #e94560;
+                        text-align: center;
+                        max-width: 420px;
+                        width: 90%;
+                        box-shadow: 0 0 40px rgba(233, 69, 96, 0.3);
+                    ">
+                        <div style="font-size: 4em; margin-bottom: 15px;">🔐</div>
+                        <h1 style="
+                            color: #e94560;
+                            margin-bottom: 10px;
+                            font-size: 1.8em;
+                            text-transform: uppercase;
+                            letter-spacing: 2px;
+                        ">ACCESO RESTRINGIDO</h1>
+                        <p style="color: #888; margin-bottom: 30px; font-size: 1em;">
+                            Ingresa el PIN de 4 dígitos para continuar
+                        </p>
+                        <div style="
+                            display: flex;
+                            gap: 12px;
+                            justify-content: center;
+                            margin-bottom: 25px;
+                        ">
+                            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-input" id="pin1" style="
+                                width: 60px; height: 70px;
+                                background: #0a0a1a;
+                                border: 3px solid #0f3460;
+                                border-radius: 12px;
+                                color: #e94560;
+                                font-size: 2.2em;
+                                font-weight: bold;
+                                text-align: center;
+                                outline: none;
+                                transition: all 0.3s;
+                                caret-color: transparent;
+                                -webkit-text-security: disc;
+                            ">
+                            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-input" id="pin2" style="
+                                width: 60px; height: 70px;
+                                background: #0a0a1a;
+                                border: 3px solid #0f3460;
+                                border-radius: 12px;
+                                color: #e94560;
+                                font-size: 2.2em;
+                                font-weight: bold;
+                                text-align: center;
+                                outline: none;
+                                transition: all 0.3s;
+                                caret-color: transparent;
+                                -webkit-text-security: disc;
+                            ">
+                            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-input" id="pin3" style="
+                                width: 60px; height: 70px;
+                                background: #0a0a1a;
+                                border: 3px solid #0f3460;
+                                border-radius: 12px;
+                                color: #e94560;
+                                font-size: 2.2em;
+                                font-weight: bold;
+                                text-align: center;
+                                outline: none;
+                                transition: all 0.3s;
+                                caret-color: transparent;
+                                -webkit-text-security: disc;
+                            ">
+                            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-input" id="pin4" style="
+                                width: 60px; height: 70px;
+                                background: #0a0a1a;
+                                border: 3px solid #0f3460;
+                                border-radius: 12px;
+                                color: #e94560;
+                                font-size: 2.2em;
+                                font-weight: bold;
+                                text-align: center;
+                                outline: none;
+                                transition: all 0.3s;
+                                caret-color: transparent;
+                                -webkit-text-security: disc;
+                            ">
+                        </div>
+                        <div id="pin-error" style="
+                            color: #e74c3c;
+                            font-size: 0.9em;
+                            margin-bottom: 15px;
+                            min-height: 20px;
+                            font-weight: bold;
+                            opacity: 0;
+                            transition: opacity 0.3s;
+                        ">PIN incorrecto. Intenta de nuevo.</div>
+                        <button onclick="verifyPin()" style="
+                            padding: 15px 50px;
+                            background: #e94560;
+                            color: #fff;
+                            border: none;
+                            border-radius: 10px;
+                            font-size: 1.1em;
+                            font-weight: bold;
+                            cursor: pointer;
+                            transition: all 0.3s;
+                            text-transform: uppercase;
+                            letter-spacing: 1px;
+                            width: 100%;
+                        " onmouseover="this.style.background='#c0392b'; this.style.transform='scale(1.02)'" 
+                        onmouseout="this.style.background='#e94560'; this.style.transform='scale(1)'">
+                            🔓 DESBLOQUEAR
+                        </button>
+                        <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #0f3460;">
+                            <p style="color: #555; font-size: 0.75em; margin: 0;">
+                                🔒 Sistema de seguridad activado<br>
+                                Mesa 1 - MESA 1
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.style.overflow = 'hidden';
+            const style = document.createElement('style');
+            style.textContent = `
+                .pin-input:focus {
+                    border-color: #e94560 !important;
+                    box-shadow: 0 0 20px rgba(233, 69, 96, 0.6) !important;
+                    transform: scale(1.08);
+                }
+                .pin-input.filled {
+                    border-color: #2ecc71 !important;
+                    background: rgba(46, 204, 113, 0.15) !important;
+                }
+                .pin-input.error {
+                    border-color: #e74c3c !important;
+                    background: rgba(231, 76, 60, 0.15) !important;
+                    animation: shakePin 0.5s ease-in-out;
+                }
+                @keyframes shakePin {
+                    0%, 100% { transform: translateX(0); }
+                    20% { transform: translateX(-10px); }
+                    40% { transform: translateX(10px); }
+                    60% { transform: translateX(-5px); }
+                    80% { transform: translateX(5px); }
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(-20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                #pin-overlay > div {
+                    animation: fadeIn 0.5s ease-out;
+                }
+            `;
+            document.head.appendChild(style);
+            setupPinInputs();
+        }
+        function setupPinInputs() {
+            const inputs = document.querySelectorAll('.pin-input');
+            inputs.forEach((input, index) => {
+                input.addEventListener('keydown', (e) => {
+                    if (e.key >= '0' && e.key <= '9') {
+                        input.value = e.key;
+                        input.classList.add('filled');
+                        if (index < inputs.length - 1) {
+                            inputs[index + 1].focus();
+                        } else {
+                            setTimeout(verifyPin, 150);
+                        }
+                        e.preventDefault();
+                    } else if (e.key === 'Backspace') {
+                        if (input.value === '' && index > 0) {
+                            inputs[index - 1].focus();
+                            inputs[index - 1].value = '';
+                            inputs[index - 1].classList.remove('filled');
+                        } else {
+                            input.value = '';
+                            input.classList.remove('filled');
+                        }
+                        e.preventDefault();
+                    } else if (e.key === 'Enter') {
+                        verifyPin();
+                        e.preventDefault();
+                    } else if (e.key === 'ArrowLeft' && index > 0) {
+                        inputs[index - 1].focus();
+                        e.preventDefault();
+                    } else if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+                        inputs[index + 1].focus();
+                        e.preventDefault();
+                    } else {
+                        e.preventDefault();
+                    }
+                });
+                input.addEventListener('paste', (e) => {
+                    e.preventDefault();
+                    const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+                    if (pasteData) {
+                        pasteData.split('').forEach((char, i) => {
+                            if (inputs[i]) {
+                                inputs[i].value = char;
+                                inputs[i].classList.add('filled');
+                            }
+                        });
+                        if (pasteData.length === 4) {
+                            setTimeout(verifyPin, 200);
+                        } else if (inputs[pasteData.length]) {
+                            inputs[pasteData.length].focus();
+                        }
+                    }
+                });
+                input.addEventListener('contextmenu', (e) => e.preventDefault());
+                if (index === 0) {
+                    setTimeout(() => input.focus(), 200);
+                }
+            });
+        }
+        window.verifyPin = function() {
+            const inputs = document.querySelectorAll('.pin-input');
+            let enteredPin = '';
+            inputs.forEach(input => {
+                enteredPin += input.value;
+            });
+            const errorDiv = document.getElementById('pin-error');
+            if (enteredPin === getAdminPin()) {
+                inputs.forEach(input => {
+                    input.style.borderColor = '#2ecc71';
+                    input.style.background = 'rgba(46, 204, 113, 0.2)';
+                    input.style.boxShadow = '0 0 15px rgba(46, 204, 113, 0.5)';
+                });
+                errorDiv.style.color = '#2ecc71';
+                errorDiv.textContent = '✅ Acceso concedido. Cargando...';
+                errorDiv.style.opacity = '1';
+                setVerifiedSession();
+                setTimeout(() => {
+                    window.location.reload();
+                }, 600);
+            } else {
+                inputs.forEach(input => {
+                    input.classList.add('error');
+                    input.value = '';
+                    input.classList.remove('filled');
+                });
+                errorDiv.style.opacity = '1';
+                setTimeout(() => {
+                    inputs.forEach(input => input.classList.remove('error'));
+                }, 500);
+                setTimeout(() => {
+                    if (inputs[0]) inputs[0].focus();
+                }, 600);
+            }
+        };
+        if (hasActiveSession()) {
+            console.log('✅ Sesión PIN verificada');
+            return;
+        }
+        showPinScreen();
+        throw new Error('ESPERANDO_PIN');
+    })();
+    </script>
+
+    <!-- ==================== PANTALLA 1: PRINCIPAL (SOLO EN VIVO) ==================== -->
+    <div class="container" id="mainScreen">
+        <div class="header">
+            <div class="header-left">
+                <div id="mesaInfo" style="display:flex;flex-direction:column;align-items:flex-start;margin-right:15px;min-width:120px;">
+                    <span id="mesaNameDisplay" style="color:#e94560;font-size:1.4em;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">MESA</span>
+                    <span id="mesaIdDisplay" style="color:#555;font-size:0.65em;font-family:monospace;display:none;">-</span>
+                </div>
+                <h1 style="font-size:1.2em;display:flex;align-items:center;gap:10px;">
+                    <span style="display:none;">🏆 MESA</span>
+                    <span class="live-indicator">● LIVE</span>
+                </h1>
+                <div class="broadcast-status" id="broadcastStatus" style="display: none;">
+                    <div class="broadcast-dot"></div>
+                    <span class="broadcast-text">TRANSMITIENDO</span>
+                    <span class="viewer-count" id="viewerCount">0 espectadores</span>
+                </div>
+            </div>
+            <div class="player-selector">
+
+                <button class="btn-player-count" onclick="setPlayerCount(2)">2 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(3)">3 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(4)">4 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(5)">5 JUGADOR</button>
+                <button class="btn-player-count" onclick="setPlayerCount(6)">6 JUGADOR</button>
+                <button class="btn-inicio-juego" id="btnCambiarPin" onclick="showPinChangeModal()" style="background: #9b59b6; margin-left: 10px; display: none;">
+                    🔐 CAMBIAR PIN
+                </button>
+                <button class="btn-inicio-juego" id="btnCambiarMesa" onclick="changeMesaConfig()" style="background: #e67e22; margin-left: 10px; display: none;" title="Cambiar nombre de mesa">
+                    📡 CAMBIAR MESA
+                </button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="players-left" id="playersLeft"></div>
+            <div class="center-panel">
+                <div class="camera-container" id="cameraContainer">
+                    <div class="camera-placeholder" id="cameraPlaceholder">
+                        <div style="font-size: 2.5em; margin-bottom: 10px;">📹</div>
+                        <div id="placeholderText">Buscando cámara...</div>
+                        <button class="btn-refresh-cameras" style="margin-top: 15px;" onclick="showCameraSelector()">
+                            📷 Seleccionar Cámara
+                        </button>
+                    </div>
+                    <video class="camera-feed hidden" id="cameraFeed" autoplay muted playsinline></video>
+                    <video class="camera-feed" id="delayedVideo" autoplay playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:5; background:#000;"></video>
+                    <div class="delay-indicator" id="delayIndicator" style="display:none;">⏱️ RETARDO: 10s</div>
+                </div>
+            </div>
+            <div class="players-right" id="playersRight"></div>
+        </div>
+    </div>
+
+    <!-- BARRA DE CONTROL SIMPLE (PANTALLA 1) - Solo botones, sin slider -->
+    <div class="live-controls-bar" id="liveControlsBar">
+        <div class="live-status">
+            <span class="rec-dot"></span>
+            <span>GRABANDO</span>
+            <span class="live-time" id="liveRecordingTime">00:00:00</span>
+        </div>
+        <button class="live-control-btn" id="btnSoundToggle" onclick="toggleSound()" title="Silenciar/Escuchar audio de la cámara" style="background: #0f3460; color: #fff;">
+            🔊
+        </button>
+        <button class="live-control-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Pantalla Completa" style="background: #0f3460; color: #fff;">
+            ⛶
+        </button>
+        <button class="live-control-btn" id="btnInicioJuego" onclick="confirmResetFromHeader()" style="background: #2ecc71; color: #fff;">
+            🔄 INICIO JUEGO
+        </button>
+        <button class="live-control-btn recording" id="btnStopRecBar" onclick="toggleManualRecordingPause()" style="background: #c0392b;">
+            ⏹ OFF CAMARA
+        </button>
+        <button class="live-control-btn recording" id="btnGoLive" onclick="goToLive()" style="display:none;">
+            ● EN VIVO
+        </button>
+        <button class="live-control-btn" onclick="openBufferScreen()">
+            📼 REPETICIÓN
+        </button>
+        <button class="live-control-btn" onclick="goBack10s()" style="display:none !important;">
+            ⏪ -10s
+        </button>
+        <button class="live-control-btn" onclick="goForward10s()" style="display:none !important;">
+            ⏩ +10s
+        </button>
+        <button class="live-control-btn" id="btnLivePause" onclick="togglePausePlay()" style="display:none !important;">
+            ⏸️ PAUSAR
+        </button>
+        <button class="live-control-btn" id="btnMotionToggle" onclick="toggleMotionDetection()" title="Activar/Desactivar detección de movimiento">
+            🎯 SENSOR MOV
+        </button>
+        <button class="live-control-btn" id="btnToggleBroadcast" onclick="toggleBroadcast()" title="Activar/Desactivar transmisión en vivo">
+            🔒 JUEGO PRIVADO
+        </button>
+    </div>
+
+    <!-- ==================== PANTALLA 2: OVERLAY DE BUFFER/REPRODUCCIÓN ==================== -->
+    <div class="playback-overlay" id="playbackOverlay">
+        <!-- Header -->
+        <div class="playback-header">
+            <h2>📼 BUFFER DE GRABACIÓN</h2>
+            <div class="playback-header-info">
+                <div>Inicio: <span class="time-value" id="bufferStartTime">--:--:--</span></div>
+                <div>Duración total: <span class="time-value" id="bufferTotalDuration">00:00:00</span></div>
+                <div>Posición: <span class="time-value" id="bufferPosition">00:00:00</span></div>
+            </div>
+        </div>
+
+        <!-- Video -->
+        <div class="playback-video-container">
+            <div class="playback-label">📼 REPRODUCCIÓN DEL BUFFER</div>
+            <video class="playback-video" id="playbackVideo" autoplay playsinline></video>
+        </div>
+
+        <!-- Panel del Buffer con Slider -->
+        <div class="buffer-panel">
+            <div class="buffer-header">
+                <div class="buffer-title">
+                    <span class="rec-dot"></span>
+                    Navegación del Buffer
+                </div>
+                <div class="buffer-info">
+                    <div>Inicio: <span id="panelStartTime">--:--:--</span></div>
+                    <div>Duración: <span id="panelDuration">00:00:00</span></div>
+                    <div>Posición: <span id="panelPosition">00:00:00</span></div>
+                </div>
+            </div>
+
+            <!-- Slider de navegación -->
+            <div class="slider-wrapper" id="bufferSliderWrapper">
+                <div class="slider-progress" id="bufferSliderProgress"></div>
+                <div class="slider-buffer-zones" id="bufferZones"></div>
+                <div class="slider-time-markers" id="bufferTimeMarkers"></div>
+                <div class="slider-thumb" id="bufferSliderThumb"></div>
+                <div class="slider-tooltip" id="bufferSliderTooltip">00:00:00</div>
+            </div>
+
+            <!-- Controles -->
+            <div class="buffer-controls">
+                <button class="buffer-btn close-btn" onclick="closeBufferScreen()" style="display:none !important;">
+                    ❌ CERRAR BUFFER
+                </button>
+                <button class="buffer-btn active" id="btnBufferLive" onclick="goToLive()">
+                    ● VOLVER
+                </button>
+                <button class="buffer-btn" id="btnBufferPause" onclick="togglePausePlay()">
+                    ⏸️ PAUSAR
+                </button>
+                <button class="buffer-btn" onclick="goBack10s()">
+                    ⏪ -10s
+                </button>
+                <button class="buffer-btn" onclick="goForward10s()">
+                    ⏩ +10s
+                </button>
+                <button class="buffer-btn" onclick="goBack30s()">
+                    ⏪ -30s
+                </button>
+                <button class="buffer-btn" onclick="goForward30s()">
+                    ⏩ +30s
+                </button>
+                <div class="buffer-status">
+                    <span class="status-dot" id="bufferStatusDot"></span>
+                    <span id="bufferStatusText">Grabando...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selector de cámara -->
+    <div class="camera-selector-overlay" id="cameraSelector">
+        <div class="camera-selector-title">📷 Seleccionar Fuente de Cámara</div>
+        <div style="color: #aaa; margin-bottom: 10px; text-align: center;">
+            Prioridad: WiFi/IP → Celular → USB/OTG
+        </div>
+        <div class="camera-list" id="cameraList"></div>
+        <button class="btn-refresh-cameras" onclick="refreshCameraList()">🔄 Actualizar Lista</button>
+        <button class="btn-refresh-cameras" style="background: #e74c3c;" onclick="closeCameraSelector()">✖ Cerrar</button>
+    </div>
+
+    <!-- Modal de reinicio -->
+    <div class="modal-overlay" id="resetModal">
+        <div class="modal-content">
+            <h2>¿Reiniciar Juego?</h2>
+            <p>Se borrarán todos los puntos y grabaciones. ¿Estás seguro?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn yes" onclick="confirmReset()">Sí</button>
+                <button class="modal-btn no" onclick="hideResetModal()">No</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        // ==================== CONFIGURACIÓN ====================
+        // SISTEMA DE ID ÚNICO POR MESA - Cada mesa tiene su propio canal independiente
+        let BROADCASTER_ID = localStorage.getItem('mesa_broadcaster_id') || '';
+        const PEER_CONFIG = { host: '0.peerjs.com', port: 443, secure: true, debug: 1 };
+
+        // Genera un ID único basado en el nombre de la mesa + hash para evitar colisiones
+        function generateBroadcasterId(mesaName) {
+            const clean = mesaName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            const hash = Array.from(clean).reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0);
+            const hashStr = Math.abs(hash).toString(36).substring(0, 6);
+            return 'mesa-' + clean + '-' + hashStr + '-2024';
+        }
+
+        // Mostrar selector de mesa al inicio si no hay ID guardado
+        function showMesaSelector() {
+            if (BROADCASTER_ID && localStorage.getItem('mesa_name')) {
+                document.getElementById('mesaNameDisplay').textContent = localStorage.getItem('mesa_name');
+                document.getElementById('mesaIdDisplay').textContent = BROADCASTER_ID;
+                return true; // Ya configurado
+            }
+
+            const overlay = document.createElement('div');
+            overlay.id = 'mesaSelectorOverlay';
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(10,10,26,0.98); z-index: 99997;
+                display: flex; flex-direction: column;
+                align-items: center; justify-content: center;
+                font-family: 'Segoe UI', sans-serif; gap: 20px;
+            `;
+            overlay.innerHTML = `
+                <div style="background: #16213e; padding: 50px 40px; border-radius: 20px; border: 3px solid #e94560; text-align: center; max-width: 450px; width: 90%; box-shadow: 0 0 40px rgba(233, 69, 96, 0.3);">
+                    <div style="font-size: 3.5em; margin-bottom: 15px;">📡</div>
+                    <h1 style="color: #e94560; margin-bottom: 10px; font-size: 1.6em; text-transform: uppercase; letter-spacing: 2px;">CONFIGURAR MESA</h1>
+                    <p style="color: #888; margin-bottom: 30px; font-size: 0.95em;">
+                        Ingresa un nombre único para esta mesa.<br>
+                        Cada mesa necesita un nombre diferente.<br>
+                        <span style="color: #e94560; font-weight: bold;">Ejemplos: Mesa1, Mesa2, TorneoA, Sala3</span>
+                    </p>
+                    <input type="text" id="mesaNameInput" placeholder="Nombre de la mesa..." maxlength="20" style="
+                        width: 100%; padding: 15px 20px; background: #0a0a1a; border: 2px solid #0f3460;
+                        border-radius: 12px; color: #e94560; font-size: 1.3em; font-weight: bold;
+                        text-align: center; outline: none; transition: all 0.3s; margin-bottom: 20px;
+                        text-transform: uppercase; letter-spacing: 1px;
+                    " onkeydown="if(event.key==='Enter')saveMesaConfig()">
+                    <div id="mesaError" style="color: #e74c3c; font-size: 0.9em; margin-bottom: 15px; min-height: 20px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></div>
+                    <button onclick="saveMesaConfig()" style="
+                        padding: 15px 50px; background: #e94560; color: #fff; border: none;
+                        border-radius: 10px; font-size: 1.1em; font-weight: bold; cursor: pointer;
+                        transition: all 0.3s; text-transform: uppercase; letter-spacing: 1px; width: 100%;
+                    " onmouseover="this.style.background='#c0392b'; this.style.transform='scale(1.02)'
+                    onmouseout="this.style.background='#e94560'; this.style.transform='scale(1)'">
+                        ✅ GUARDAR CONFIGURACIÓN
+                    </button>
+                    <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #0f3460;">
+                        <p style="color: #555; font-size: 0.75em; margin: 0;">
+                            🔒 Este nombre define el canal de transmisión único<br>
+                            Los espectadores necesitarán este nombre para conectarse
+                        </p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            setTimeout(() => document.getElementById('mesaNameInput').focus(), 200);
+            return false;
+        }
+
+        window.saveMesaConfig = function() {
+            const input = document.getElementById('mesaNameInput');
+            const name = input.value.trim();
+            const errorDiv = document.getElementById('mesaError');
+            if (!name || name.length < 2) {
+                errorDiv.textContent = '❌ Ingresa al menos 2 caracteres';
+                errorDiv.style.opacity = '1';
+                input.style.borderColor = '#e74c3c';
+                setTimeout(() => { errorDiv.style.opacity = '0'; input.style.borderColor = '#0f3460'; }, 2000);
+                return;
+            }
+            BROADCASTER_ID = generateBroadcasterId(name);
+            localStorage.setItem('mesa_broadcaster_id', BROADCASTER_ID);
+            localStorage.setItem('mesa_name', name);
+            document.getElementById('mesaSelectorOverlay').remove();
+            document.getElementById('mesaNameDisplay').textContent = name;
+            document.getElementById('mesaIdDisplay').textContent = BROADCASTER_ID;
+            console.log('✅ Mesa configurada:', name, '→ ID:', BROADCASTER_ID);
+            // Reiniciar broadcast con nuevo ID
+            if (stream) restartBroadcast();
+        };
+
+        window.changeMesaConfig = function() {
+            localStorage.removeItem('mesa_broadcaster_id');
+            localStorage.removeItem('mesa_name');
+            window.location.reload();
+        };
+
+        // Ocultar botón CAMBIAR MESA al inicio
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('btnCambiarMesa');
+            if (btn) btn.style.display = 'none';
+        });
+        const BUFFER_DURATION_MS = 24 * 60 * 60 * 1000;
+        const DELAY_MS = 10000;
+
+        // ==================== ESTADO GLOBAL ====================
+        let playerCount = 2;
+        let players = [];
+        let soundEnabled = false;
+        let stream = null;
+        let currentCameraLabel = '';
+        let currentDeviceId = null;
+        let broadcastPeer = null;
+        let activeCalls = new Map();
+        let isBroadcasting = false;
+        let broadcastEnabled = true;
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // ==================== SISTEMA DE BUFFER CIRCULAR ====================
+        let circularBuffer = [];
+        let bufferStartTime = null;
+        let bufferMediaRecorder = null;
+        let isBufferRecording = false;
+        let bufferInterval = null;
+        let totalBufferDuration = 0;
+        let lastSegmentEndTime = 0;
+
+        // ==================== ESTADO DE REPRODUCCIÓN ====================
+        let isPlaybackActive = false;
+        let isPaused = false;
+        let isSliderDragging = false;
+        let playbackPosition = 0;
+        let isPlayingFromBuffer = false;
+
+        // ==================== MSE PARA REPRODUCCIÓN ====================
+        let playbackMSE = null;
+        let playbackSourceBuffer = null;
+        let playbackMSEReady = false;
+        let playbackAppendQueue = [];
+        let playbackAppendedSegments = new Set();
+        let playbackUpdateInterval = null;
+
+        // ==================== MSE PARA RETARDO 10s ====================
+        let delayMediaSource = null;
+        let delaySourceBuffer = null;
+        let delayMediaRecorder = null;
+        let delayQueue = [];
+        let isMSEReady = false;
+
+        // ==================== CLASIFICACIÓN DE CÁMARAS ====================
+        const CAMERA_PRIORITY = { WIFI: 1, PHONE: 2, USB_OTG: 3, EXTERNAL: 4, INTERNAL: 5 };
+        const CAMERA_KEYWORDS = {
+            wifi: ['ip camera', 'network', 'wifi', 'wireless', 'rtsp', 'onvif', 'p2p', 'cloud', 'remote'],
+            usb_otg: ['usb', 'otg', 'uvc', 'generic usb', 'usb camera', 'usb2.0', 'usb3.0'],
+            external: ['hdmi', 'capture', 'cam link', 'elgato', 'avermedia', 'blackmagic', 'magewell', 'obs', 'virtual'],
+            internal: ['integrated', 'built-in', 'internal', 'laptop', 'front', 'rear', 'faceTime', 'photo booth', 'snap']
+        };
+
+        function classifyCamera(label) {
+            if (!label) return { type: 'unknown', priority: 99 };
+            const lowerLabel = label.toLowerCase();
+            for (const keyword of CAMERA_KEYWORDS.wifi) {
+                if (lowerLabel.includes(keyword)) return { type: 'wifi', priority: CAMERA_PRIORITY.WIFI, label: 'WiFi/IP' };
+            }
+            for (const keyword of CAMERA_KEYWORDS.usb_otg) {
+                if (lowerLabel.includes(keyword)) return { type: 'usb_otg', priority: CAMERA_PRIORITY.USB_OTG, label: 'USB/OTG' };
+            }
+            for (const keyword of CAMERA_KEYWORDS.external) {
+                if (lowerLabel.includes(keyword)) return { type: 'external', priority: CAMERA_PRIORITY.EXTERNAL, label: 'HDMI/Capture' };
+            }
+            for (const keyword of CAMERA_KEYWORDS.internal) {
+                if (lowerLabel.includes(keyword)) return { type: 'internal', priority: CAMERA_PRIORITY.INTERNAL, label: 'Interna' };
+            }
+            if (lowerLabel.includes('camera') || lowerLabel.includes('cam')) {
+                return { type: 'external', priority: CAMERA_PRIORITY.EXTERNAL, label: 'Cámara' };
+            }
+            return { type: 'unknown', priority: 99, label: 'Desconocida' };
+        }
+
+        function getCameraIcon(type) {
+            const icons = { wifi: '📡', phone: '📱', usb_otg: '🔌', external: '🎥', internal: '💻', unknown: '📷' };
+            return icons[type] || '📷';
+        }
+
+        // ==================== AUDIO ====================
+        function playBeep(frequency = 800, duration = 200, type = 'square') {
+            if (!soundEnabled) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration / 1000);
+        }
+
+        // ==================== JUGADORES ====================
+        function initPlayers() {
+            players = [];
+            for (let i = 1; i <= 6; i++) {
+                players.push({ id: i, score: 0, active: i <= playerCount });
+            }
+            renderPlayers();
+            const mainContent = document.querySelector('.main-content');
+            if (playerCount === 2) {
+                mainContent.classList.add('two-players-mode');
+            } else {
+                mainContent.classList.remove('two-players-mode');
+            }
+        }
+
+        function renderPlayers() {
+            const leftContainer = document.getElementById('playersLeft');
+            const rightContainer = document.getElementById('playersRight');
+            leftContainer.innerHTML = '';
+            rightContainer.innerHTML = '';
+
+            // Si hay 3 jugadores, distribuir: izq(1+2 jugadores), der(1 jugador + panel azul)
+            const activePlayers = players.filter(p => p.active);
+
+            players.forEach((player) => {
+                if (!player.active) return;
+                const isLeft = player.id % 2 === 1;
+                const theme = (player.id - 1) % 2 === 0 ? 'yellow-theme' : 'white-theme';
+                const card = document.createElement('div');
+                card.className = `player-card ${theme}`;
+                card.innerHTML = `
+                    <div class="player-number">Jugador ${player.id}</div>
+                    <div class="score-display">
+                        <div class="player-score" onclick="changeScore(${player.id}, 1)">${player.score}</div>
+                    </div>
+                    <div class="score-controls">
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 1)">+1</button>
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 2)">+2</button>
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 3)">+3</button>
+                        <button class="score-btn add" onclick="changeScore(${player.id}, 4)">+4</button>
+                        <button class="score-btn subtract" onclick="changeScore(${player.id}, -1)">-1</button>
+                    </div>
+                `;
+                if (isLeft) {
+                    leftContainer.appendChild(card);
+                } else {
+                    rightContainer.appendChild(card);
+                }
+            });
+
+            // Si hay exactamente 3 jugadores, agregar panel azul vacío en el lado derecho
+            if (playerCount === 3) {
+                const emptyPanel = document.createElement('div');
+                emptyPanel.className = 'empty-blue-panel';
+                rightContainer.appendChild(emptyPanel);
+            }
+        }
+
+        function setPlayerCount(count) {
+            playerCount = count;
+            document.querySelectorAll('.btn-player-count').forEach((btn) => {
+                const btnNumber = parseInt(btn.textContent);
+                btn.classList.toggle('active', btnNumber === count);
+            });
+            initPlayers();
+        }
+
+        function changeScore(playerId, delta) {
+            const player = players.find(p => p.id === playerId);
+            if (!player) return;
+            const newScore = player.score + delta;
+            if (newScore >= 0 && newScore <= 300) {
+                player.score = newScore;
+                renderPlayers();
+                playBeep(1000, 50, 'sine');
+            }
+        }
+
+        // ==================== CÁMARA ====================
+        async function getAvailableCameras() {
+            try {
+                await navigator.mediaDevices.getUserMedia({ video: true });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                return videoDevices.map(device => {
+                    const classification = classifyCamera(device.label);
+                    return { deviceId: device.deviceId, label: device.label || 'Cámara sin nombre', ...classification };
+                }).sort((a, b) => a.priority - b.priority);
+            } catch (err) {
+                console.error('Error enumerando cámaras:', err);
+                return [];
+            }
+        }
+
+        async function showCameraSelector() {
+            const cameraList = document.getElementById('cameraList');
+            const selector = document.getElementById('cameraSelector');
+            cameraList.innerHTML = '<div style="text-align: center; color: #aaa; padding: 20px;">Buscando cámaras...</div>';
+            selector.classList.add('active');
+            const cameras = await getAvailableCameras();
+            if (cameras.length === 0) {
+                cameraList.innerHTML = '<div style="text-align: center; color: #e74c3c; padding: 20px;">No se encontraron cámaras</div>';
+                return;
+            }
+            cameraList.innerHTML = cameras.map((cam, index) => `
+                <div class="camera-option ${currentDeviceId === cam.deviceId ? 'selected' : ''}" 
+                     onclick="selectCamera('${cam.deviceId}')">
+                    <div class="camera-icon">${getCameraIcon(cam.type)}</div>
+                    <div class="camera-info">
+                        <div class="camera-name">${cam.label}</div>
+                        <div class="camera-type">Prioridad: ${cam.priority} - ${cam.label}</div>
+                    </div>
+                    <div class="camera-status ${cam.type}">${cam.label}</div>
+                </div>
+            `).join('');
+        }
+
+        function closeCameraSelector() {
+            document.getElementById('cameraSelector').classList.remove('active');
+        }
+
+        function refreshCameraList() {
+            showCameraSelector();
+        }
+
+        async function selectCamera(deviceId) {
+            closeCameraSelector();
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            stopDelaySystem();
+            stopBufferRecording();
+            try {
+                const constraints = {
+                    video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: true
+                };
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                currentDeviceId = deviceId;
+                const video = document.getElementById('cameraFeed');
+                video.srcObject = stream;
+                document.getElementById('cameraPlaceholder').classList.add('hidden');
+                video.classList.remove('hidden');
+                video.muted = !soundEnabled;
+                const delayedVideo = document.getElementById('delayedVideo');
+                if (delayedVideo) delayedVideo.muted = !soundEnabled;
+                const soundBtn = document.getElementById('btnSoundToggle');
+                if (soundBtn) {
+                    soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+                    soundBtn.classList.toggle('muted', !soundEnabled);
+                }
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const device = devices.find(d => d.deviceId === deviceId);
+                currentCameraLabel = device ? device.label : 'Cámara seleccionada';
+                console.log('✅ Cámara conectada:', currentCameraLabel);
+                playBeep(800, 100, 'sine');
+                setTimeout(() => initMSEDelaySystem(), 1000);
+                if (broadcastEnabled) {
+                    restartBroadcast();
+                }
+                startBufferRecording();
+            } catch (err) {
+                console.error('Error conectando cámara:', err);
+                alert('Error al conectar la cámara: ' + err.message);
+            }
+        }
+
+        async function findAndConnectCamera() {
+            console.log('🔍 Buscando cámaras con prioridad...');
+            try {
+                const cameras = await getAvailableCameras();
+                if (cameras.length === 0) {
+                    console.log('❌ No se encontraron cámaras');
+                    document.getElementById('placeholderText').textContent = 'No hay cámaras disponibles';
+                    return;
+                }
+                console.log(`📹 ${cameras.length} cámara(s) encontrada(s)`);
+                cameras.forEach((cam, i) => {
+                    console.log(`  ${i+1}. ${cam.label} [${cam.label}]`);
+                });
+                for (const camera of cameras) {
+                    try {
+                        console.log(`🎥 Intentando conectar: ${camera.label}`);
+                        const constraints = {
+                            video: { deviceId: { exact: camera.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                            audio: true
+                        };
+                        stream = await navigator.mediaDevices.getUserMedia(constraints);
+                        const video = document.getElementById('cameraFeed');
+                        video.srcObject = stream;
+                        document.getElementById('cameraPlaceholder').classList.add('hidden');
+                        video.classList.remove('hidden');
+                        currentDeviceId = camera.deviceId;
+                        currentCameraLabel = camera.label;
+                        console.log('✅ Cámara conectada:', currentCameraLabel);
+                        playBeep(800, 100, 'sine');
+                        setTimeout(() => initMSEDelaySystem(), 1500);
+                        if (broadcastEnabled) {
+                            setTimeout(initBroadcastPeerJS, 1000);
+                        }
+                        startBufferRecording();
+                        return;
+                    } catch (err) {
+                        console.log(`⚠️ Error con ${camera.label}:`, err.message);
+                        continue;
+                    }
+                }
+                document.getElementById('placeholderText').textContent = 'No se pudo conectar ninguna cámara';
+            } catch (err) {
+                console.error('❌ Error general:', err);
+                document.getElementById('placeholderText').textContent = 'Error de acceso a cámaras';
+            }
+        }
+
+        // ==================== CONTROL DE TRANSMISIÓN EN VIVO (CORREGIDO) ====================
+        let isTogglingBroadcast = false;
+        let broadcastConnectionTimeout = null;
+
+        function toggleBroadcast() {
+            if (isTogglingBroadcast) {
+                console.log('⏳ Cambio de broadcast en progreso, ignorando click');
+                return;
+            }
+            isTogglingBroadcast = true;
+            broadcastEnabled = !broadcastEnabled;
+
+            const btn = document.getElementById('btnToggleBroadcast');
+            const broadcastStatus = document.getElementById('broadcastStatus');
+
+            if (broadcastEnabled) {
+                btn.innerHTML = '🔒 JUEGO PRIVADO';
+                btn.classList.remove('inactive');
+                btn.style.background = '#e74c3c';
+                btn.style.animation = 'pulse 2s infinite';
+                console.log('📡 Activando transmisión...');
+
+                if (stream) {
+                    destroyBroadcastPeer(() => {
+                        setTimeout(() => {
+                            initBroadcastPeerJS();
+                            isTogglingBroadcast = false;
+                        }, 300);
+                    });
+                } else {
+                    console.warn('⚠️ No hay stream disponible para transmitir');
+                    isTogglingBroadcast = false;
+                }
+                playBeep(1000, 150, 'sine');
+            } else {
+                btn.innerHTML = '🔓 JUEGO PUBLICO';
+                btn.classList.add('inactive');
+                btn.style.background = '#7f8c8d';
+                btn.style.animation = 'none';
+
+                if (broadcastStatus) broadcastStatus.style.display = 'none';
+                isBroadcasting = false;
+
+                destroyBroadcastPeer(() => {
+                    console.log('📴 Transmisión desactivada');
+                    isTogglingBroadcast = false;
+                });
+                playBeep(400, 300, 'square');
+            }
+        }
+
+        function destroyBroadcastPeer(callback) {
+            if (broadcastConnectionTimeout) {
+                clearTimeout(broadcastConnectionTimeout);
+                broadcastConnectionTimeout = null;
+            }
+
+            if (activeCalls && activeCalls.size > 0) {
+                activeCalls.forEach((call, peerId) => {
+                    try { call.close(); } catch(e) {}
+                });
+                activeCalls.clear();
+            }
+
+            if (broadcastPeer) {
+                const oldPeer = broadcastPeer;
+                broadcastPeer = null;
+                isBroadcasting = false;
+
+                const safetyTimeout = setTimeout(() => {
+                    console.log('⏱️ Timeout de seguridad - forzando cleanup');
+                    if (callback) callback();
+                }, 2000);
+
+                oldPeer.on('close', () => {
+                    clearTimeout(safetyTimeout);
+                    console.log('🔌 Peer destruido (evento close)');
+                    if (callback) callback();
+                });
+
+                try {
+                    oldPeer.destroy();
+                } catch(e) {
+                    console.log('⚠️ Error al destruir peer:', e.message);
+                    clearTimeout(safetyTimeout);
+                    if (callback) callback();
+                }
+            } else {
+                if (callback) callback();
+            }
+            updateViewerCount();
+        }
+
+        function restartBroadcast() {
+            if (!broadcastEnabled) {
+                console.log('📴 Transmisión desactivada - No se reinicia broadcast');
+                return;
+            }
+            destroyBroadcastPeer(() => {
+                setTimeout(() => {
+                    if (broadcastEnabled && stream) {
+                        initBroadcastPeerJS();
+                    }
+                }, 500);
+            });
+        }
+
+        // ==================== PEERJS BROADCAST (CORREGIDO) ====================
+        function initBroadcastPeerJS() {
+            if (!broadcastEnabled) {
+                console.log('📴 broadcastEnabled=false, omitiendo conexión');
+                return;
+            }
+            if (!stream) {
+                console.error('❌ No hay stream disponible para transmitir');
+                return;
+            }
+            if (broadcastPeer) {
+                console.log('🔄 Broadcast ya inicializado');
+                return;
+            }
+            if (!stream.active) {
+                console.error('❌ Stream no está activo');
+                return;
+            }
+
+            console.log('📡 Iniciando PeerJS Broadcast con ID:', BROADCASTER_ID);
+
+            broadcastConnectionTimeout = setTimeout(() => {
+                console.warn('⏱️ Timeout de conexión PeerJS - destruyendo peer');
+                if (broadcastPeer) {
+                    broadcastPeer.destroy();
+                    broadcastPeer = null;
+                }
+                isBroadcasting = false;
+                const broadcastStatus = document.getElementById('broadcastStatus');
+                if (broadcastStatus) broadcastStatus.style.display = 'none';
+            }, 10000);
+
+            broadcastPeer = new Peer(BROADCASTER_ID, PEER_CONFIG);
+
+            broadcastPeer.on('open', (id) => {
+                if (broadcastConnectionTimeout) {
+                    clearTimeout(broadcastConnectionTimeout);
+                    broadcastConnectionTimeout = null;
+                }
+                console.log('✅ Broadcaster conectado con ID:', id);
+                isBroadcasting = true;
+                const broadcastStatus = document.getElementById('broadcastStatus');
+                if (broadcastStatus && broadcastEnabled) {
+                    broadcastStatus.style.display = 'flex';
+                }
+                updateViewerCount();
+                playBeep(1000, 200, 'sine');
+            });
+
+            broadcastPeer.on('call', (call) => {
+                if (!broadcastEnabled || !stream || !stream.active) {
+                    console.log('📴 Broadcast desactivado o stream inactivo - rechazando llamada');
+                    try { call.close(); } catch(e) {}
+                    return;
+                }
+                console.log('📞 Nuevo espectador conectándose:', call.peer);
+                if (stream && stream.active) {
+                    call.answer(stream);
+                    activeCalls.set(call.peer, call);
+                    console.log(`✅ Espectador conectado. Total: ${activeCalls.size}`);
+                    updateViewerCount();
+                    playBeep(1200, 100, 'sine');
+                } else {
+                    console.warn('⚠️ Stream no disponible para answer()');
+                    try { call.close(); } catch(e) {}
+                    return;
+                }
+                call.on('stream', (remoteStream) => {
+                    console.log('📥 Stream recibido del viewer (no esperado)');
+                });
+                call.on('close', () => {
+                    console.log('❌ Espectador desconectado:', call.peer);
+                    activeCalls.delete(call.peer);
+                    updateViewerCount();
+                });
+                call.on('error', (err) => {
+                    console.error('❌ Error en llamada:', err);
+                    activeCalls.delete(call.peer);
+                    updateViewerCount();
+                });
+            });
+
+            broadcastPeer.on('error', (err) => {
+                console.error('❌ Error PeerJS:', err);
+                if (err.type === 'unavailable-id') {
+                    console.log('⚠️ ID en uso, intentando con ID alternativo...');
+                    setTimeout(() => {
+                        destroyBroadcastPeer(() => {
+                            const altId = BROADCASTER_ID + '-' + Date.now();
+                            console.log('🔄 Intentando con ID:', altId);
+                        });
+                    }, 1000);
+                } else if (err.type === 'network' || err.type === 'disconnected') {
+                    console.log('🔄 Reconectando en 3 segundos...');
+                    setTimeout(() => {
+                        if (broadcastPeer && !broadcastPeer.destroyed && broadcastEnabled) {
+                            broadcastPeer.reconnect();
+                        }
+                    }, 3000);
+                }
+            });
+
+            broadcastPeer.on('disconnected', () => {
+                console.log('⚠️ Desconectado del servidor PeerJS');
+                isBroadcasting = false;
+                const broadcastStatus = document.getElementById('broadcastStatus');
+                if (broadcastStatus) broadcastStatus.style.display = 'none';
+                if (broadcastEnabled && broadcastPeer && !broadcastPeer.destroyed) {
+                    setTimeout(() => {
+                        console.log('🔄 Reconectando...');
+                        broadcastPeer.reconnect();
+                    }, 2000);
+                }
+            });
+
+            broadcastPeer.on('close', () => {
+                console.log('🔌 Peer cerrado');
+                isBroadcasting = false;
+                broadcastPeer = null;
+                activeCalls.clear();
+                const broadcastStatus = document.getElementById('broadcastStatus');
+                if (broadcastStatus) broadcastStatus.style.display = 'none';
+            });
+        }
+
+        function updateViewerCount() {
+            const count = activeCalls.size;
+            const viewerCountEl = document.getElementById('viewerCount');
+            viewerCountEl.textContent = `${count} espectador${count !== 1 ? 'es' : ''}`;
+            if (count > 0) {
+                document.title = `● LIVE (${count} viendo)`;
+            } else {
+                document.title = '● LIVE';
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('btnSoundToggle');
+            if (btn) {
+                btn.textContent = soundEnabled ? '🔊' : '🔇';
+                btn.classList.toggle('muted', !soundEnabled);
+            }
+            const delayedVideo = document.getElementById('delayedVideo');
+            if (delayedVideo) delayedVideo.muted = !soundEnabled;
+            const cameraFeed = document.getElementById('cameraFeed');
+            if (cameraFeed) cameraFeed.muted = !soundEnabled;
+            const playbackVideo = document.getElementById('playbackVideo');
+            if (playbackVideo) playbackVideo.muted = !soundEnabled;
+            console.log(soundEnabled ? '🔊 Audio activado' : '🔇 Audio silenciado');
+        }
+
+        // ==================== SISTEMA DE RETARDO 10s (PANTALLA 1) ====================
+        function initMSEDelaySystem() {
+            if (!stream) {
+                console.error('❌ No hay stream para iniciar retardo');
+                return;
+            }
+            console.log('🎬 Iniciando sistema de retardo MSE de', DELAY_MS/1000, 'segundos...');
+            stopDelaySystem();
+            const delayedVideo = document.getElementById('delayedVideo');
+            const mimeType = 'video/webm; codecs="vp9,opus"';
+            if (!window.MediaSource) {
+                console.error('❌ MediaSource no soportado');
+                return;
+            }
+            if (!MediaSource.isTypeSupported(mimeType)) {
+                console.warn('⚠️ vp9 no soportado, probando vp8...');
+                const altMime = 'video/webm; codecs="vp8,opus"';
+                if (!MediaSource.isTypeSupported(altMime)) {
+                    console.error('❌ Codecs no soportados');
+                    return;
+                }
+            }
+            try {
+                delayMediaSource = new MediaSource();
+                delayMediaSource.addEventListener('sourceopen', onMSESourceOpen);
+                delayMediaSource.addEventListener('sourceended', () => console.log('⏹ MSE ended'));
+                delayMediaSource.addEventListener('error', (e) => console.error('❌ MSE error:', e));
+                delayedVideo.src = URL.createObjectURL(delayMediaSource);
+                console.log('✅ MediaSource creado para retardo 10s');
+            } catch (err) {
+                console.error('❌ Error creando MSE:', err);
+            }
+        }
+
+        function onMSESourceOpen() {
+            console.log('📂 MSE Source abierto (retardo 10s)');
+            const mimeType = 'video/webm; codecs="vp9,opus"';
+            const altMime = 'video/webm; codecs="vp8,opus"';
+            const finalMime = MediaSource.isTypeSupported(mimeType) ? mimeType : altMime;
+            try {
+                delaySourceBuffer = delayMediaSource.addSourceBuffer(finalMime);
+                delaySourceBuffer.mode = 'sequence';
+                delaySourceBuffer.addEventListener('updateend', () => {
+                    processDelayQueue();
+                });
+                delaySourceBuffer.addEventListener('error', (e) => {
+                    console.error('❌ SourceBuffer error:', e);
+                });
+                isMSEReady = true;
+                console.log('✅ SourceBuffer creado para retardo 10s');
+                startDelayRecording();
+            } catch (err) {
+                console.error('❌ Error creando SourceBuffer:', err);
+            }
+        }
+
+        function startDelayRecording() {
+            if (!stream) return;
+            delayQueue = [];
+            const options = { 
+                mimeType: 'video/webm;codecs=vp9,opus',
+                audioBitsPerSecond: 128000,
+                videoBitsPerSecond: 2500000
+            };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'video/webm;codecs=vp8,opus';
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm';
+                }
+            }
+            try {
+                delayMediaRecorder = new MediaRecorder(stream, options);
+                delayMediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        const chunk = {
+                            blob: event.data,
+                            timestamp: Date.now(),
+                            processed: false
+                        };
+                        delayQueue.push(chunk);
+                        const cutoff = Date.now() - 30000;
+                        while (delayQueue.length > 0 && delayQueue[0].timestamp < cutoff) {
+                            delayQueue.shift();
+                        }
+                        processDelayQueue();
+                    }
+                };
+                delayMediaRecorder.onstop = () => {
+                    console.log('⏹ Grabación de retardo detenida');
+                };
+                delayMediaRecorder.onerror = (err) => {
+                    console.error('❌ Error MediaRecorder:', err);
+                };
+                delayMediaRecorder.start(500);
+                document.getElementById('delayIndicator').style.display = 'none';
+                console.log('🔴 Grabación continua iniciada - Retardo:', DELAY_MS/1000, 's');
+            } catch (err) {
+                console.error('❌ Error iniciando grabación:', err);
+            }
+        }
+
+        function processDelayQueue() {
+            if (!isMSEReady || !delaySourceBuffer) return;
+            if (delaySourceBuffer.updating) return;
+            const now = Date.now();
+            const playTime = now - DELAY_MS;
+            const chunksToAppend = [];
+            let foundIndex = -1;
+            for (let i = 0; i < delayQueue.length; i++) {
+                const chunk = delayQueue[i];
+                if (!chunk.processed && chunk.timestamp <= playTime) {
+                    chunksToAppend.push(chunk.blob);
+                    chunk.processed = true;
+                    foundIndex = i;
+                }
+            }
+            if (chunksToAppend.length === 0) return;
+            const combinedBlob = new Blob(chunksToAppend, { type: delayMediaRecorder.mimeType });
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    if (delaySourceBuffer && !delaySourceBuffer.updating) {
+                        delaySourceBuffer.appendBuffer(reader.result);
+                    }
+                } catch (e) {
+                    console.error('❌ Error appendBuffer:', e.message);
+                }
+            };
+            reader.readAsArrayBuffer(combinedBlob);
+            if (foundIndex >= 0) {
+                delayQueue = delayQueue.filter(c => !c.processed || c.timestamp > playTime);
+            }
+        }
+
+        function stopDelaySystem() {
+            console.log('🛑 Deteniendo sistema de retardo...');
+            isMSEReady = false;
+            if (delayMediaRecorder && delayMediaRecorder.state !== 'inactive') {
+                delayMediaRecorder.stop();
+            }
+            delayMediaRecorder = null;
+            if (delayMediaSource && delayMediaSource.readyState === 'open') {
+                try {
+                    delayMediaSource.endOfStream();
+                } catch(e) {}
+            }
+            delayMediaSource = null;
+            delaySourceBuffer = null;
+            delayQueue = [];
+            const delayedVideo = document.getElementById('delayedVideo');
+            if (delayedVideo) {
+                delayedVideo.pause();
+                delayedVideo.removeAttribute('src');
+                delayedVideo.load();
+            }
+            document.getElementById('delayIndicator').style.display = 'none';
+            console.log('⏹ Sistema de retardo detenido');
+        }
+
+        // ==================== SISTEMA DE BUFFER CIRCULAR ====================
+        function startBufferRecording() {
+            if (!stream) {
+                console.error('❌ No hay stream para grabar buffer');
+                return;
+            }
+            circularBuffer = [];
+            bufferStartTime = Date.now();
+            totalBufferDuration = 0;
+            lastSegmentEndTime = 0;
+            isBufferRecording = true;
+
+            const options = { 
+                mimeType: 'video/webm;codecs=vp9,opus',
+                audioBitsPerSecond: 128000,
+                videoBitsPerSecond: 2500000
+            };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'video/webm;codecs=vp8,opus';
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm';
+                }
+            }
+            try {
+                bufferMediaRecorder = new MediaRecorder(stream, options);
+                bufferMediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        const now = Date.now();
+                        const segmentDuration = 1000;
+                        const blobEntry = {
+                            blob: event.data,
+                            startTime: lastSegmentEndTime,
+                            endTime: lastSegmentEndTime + segmentDuration,
+                            timestamp: now,
+                            duration: segmentDuration,
+                            id: 'seg_' + now + '_' + lastSegmentEndTime
+                        };
+                        circularBuffer.push(blobEntry);
+                        lastSegmentEndTime += segmentDuration;
+                        totalBufferDuration = lastSegmentEndTime;
+                        const maxDuration = BUFFER_DURATION_MS;
+                        while (circularBuffer.length > 0 && 
+                               (totalBufferDuration - circularBuffer[0].startTime) > maxDuration) {
+                            circularBuffer.shift();
+                        }
+                        if (circularBuffer.length > 0 && circularBuffer[0].startTime > 0) {
+                            const offset = circularBuffer[0].startTime;
+                            circularBuffer.forEach(b => {
+                                b.startTime -= offset;
+                                b.endTime -= offset;
+                            });
+                            lastSegmentEndTime -= offset;
+                            totalBufferDuration = lastSegmentEndTime;
+                        }
+                        updateLiveRecordingTime();
+                    }
+                };
+                bufferMediaRecorder.onstop = () => {
+                    console.log('⏹ Grabación del buffer detenida');
+                    isBufferRecording = false;
+                };
+                bufferMediaRecorder.onerror = (err) => {
+                    console.error('❌ Error MediaRecorder buffer:', err);
+                };
+                bufferMediaRecorder.start(1000);
+                startBufferUpdateInterval();
+                console.log('🔴 Buffer circular iniciado (24 horas máximo)');
+            } catch (err) {
+                console.error('❌ Error iniciando buffer:', err);
+            }
+        }
+
+        function stopBufferRecording() {
+            if (bufferMediaRecorder && bufferMediaRecorder.state !== 'inactive') {
+                bufferMediaRecorder.stop();
+            }
+            bufferMediaRecorder = null;
+            if (bufferInterval) {
+                clearInterval(bufferInterval);
+                bufferInterval = null;
+            }
+            isBufferRecording = false;
+            console.log('⏹ Buffer circular detenido');
+        }
+
+        function startBufferUpdateInterval() {
+            if (bufferInterval) {
+                clearInterval(bufferInterval);
+            }
+            bufferInterval = setInterval(() => {
+                if (!isPlaybackActive) {
+                    updateLiveRecordingTime();
+                }
+                if (isPlaybackActive && !isPaused && !isSliderDragging && isPlayingFromBuffer) {
+                    playbackPosition += 100;
+                    if (playbackPosition >= totalBufferDuration) {
+                        playbackPosition = totalBufferDuration;
+                        goToLive();
+                        return;
+                    }
+                    updateBufferSliderUI();
+                    updatePlaybackVideo();
+                }
+            }, 100);
+        }
+
+        function updateLiveRecordingTime() {
+            if (!bufferStartTime) return;
+            let elapsed = Date.now() - bufferStartTime;
+            if (recordingPausedByMotion && pauseStartTime > 0) {
+                elapsed = pauseStartTime - bufferStartTime - totalPausedTime;
+            } else if (totalPausedTime > 0) {
+                elapsed -= totalPausedTime;
+            }
+            if (manualRecordingPaused && manualPauseStartTime > 0) {
+                elapsed = manualAccumulatedTime;
+            } else if (manualTotalPausedTime > 0) {
+                elapsed -= manualTotalPausedTime;
+            }
+            document.getElementById('liveRecordingTime').textContent = formatDuration(Math.max(0, elapsed));
+        }
+
+        // ==================== SISTEMA DE DETECCIÓN DE MOVIMIENTO ====================
+        let motionCanvas = null;
+        let motionCtx = null;
+        let previousFrameData = null;
+        let motionDetectionActive = false;
+        let motionCheckInterval = null;
+        let motionLastDetectedTime = 0;
+        let motionScoreHistory = [];
+        let motionWarmupCounter = 0;
+        let motionPanel = null;
+        let recordingPausedByMotion = false;
+        let totalPausedTime = 0;
+        let pauseStartTime = 0;
+        let accumulatedRecordingTime = 0;
+
+        const MOTION_CONFIG = {
+            sampleSize: 20,
+            threshold: 30,
+            minMotionScore: 10,
+            noMotionTimeout: 8 * 60 * 1000,
+            checkInterval: 500,
+            sensitivity: 1.0,
+            warmupFrames: 3
+        };
+
+        function initMotionDetection() {
+            if (motionCanvas) return;
+            motionCanvas = document.createElement('canvas');
+            motionCanvas.width = 160;
+            motionCanvas.height = 120;
+            motionCanvas.style.display = 'none';
+            document.body.appendChild(motionCanvas);
+            motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+            motionDetectionActive = true;
+            motionLastDetectedTime = Date.now();
+            recordingPausedByMotion = false;
+            totalPausedTime = 0;
+            pauseStartTime = 0;
+            accumulatedRecordingTime = 0;
+            motionWarmupCounter = 0;
+            motionScoreHistory = [];
+            createMotionPanel();
+            hideMotionPanel();
+            motionCheckInterval = setInterval(checkMotion, MOTION_CONFIG.checkInterval);
+            const btn = document.getElementById('btnMotionToggle');
+            if (btn) {
+                btn.classList.add('active');
+                btn.style.background = '#e94560';
+            }
+            console.log('🔍 Detección de movimiento iniciada (8 min timeout)');
+            playBeep(1200, 100, 'sine');
+        }
+
+        function createMotionPanel() {
+            const existing = document.getElementById('motionPanel');
+            if (existing) existing.remove();
+            motionPanel = document.createElement('div');
+            motionPanel.id = 'motionPanel';
+            motionPanel.className = 'motion-panel inactive-motion';
+            motionPanel.innerHTML = `
+                <div class="motion-header">
+                    <div class="motion-dot" id="motionDot"></div>
+                    <div class="motion-title" id="motionTitle">Iniciando...</div>
+                </div>
+                <div class="motion-info">
+                    <div>Score: <span class="value" id="motionScoreVal">0</span></div>
+                    <div>Estado: <span class="value recording" id="motionRecStatus">Grabando</span></div>
+                </div>
+                <div class="motion-info">
+                    <div>Tiempo acumulado: <span class="value" id="motionAccumTime">00:00:00</span></div>
+                </div>
+            `;
+            document.body.appendChild(motionPanel);
+        }
+
+        function showMotionPanel() {
+            if (!motionPanel) createMotionPanel();
+            if (motionPanel) motionPanel.classList.add('visible');
+        }
+
+        function hideMotionPanel() {
+            if (motionPanel) motionPanel.classList.remove('visible');
+        }
+
+        function updateMotionPanel(detected, score) {
+            if (!motionPanel) return;
+            const dot = document.getElementById('motionDot');
+            const title = document.getElementById('motionTitle');
+            const scoreVal = document.getElementById('motionScoreVal');
+            const recStatus = document.getElementById('motionRecStatus');
+            const accumTime = document.getElementById('motionAccumTime');
+            if (recordingPausedByMotion) {
+                dot.className = 'motion-dot paused';
+                title.textContent = '⏸ Sin movimiento - Pausado';
+                title.className = 'motion-title paused';
+                motionPanel.className = 'motion-panel paused-motion';
+                if (recStatus) { recStatus.textContent = 'Pausado'; recStatus.className = 'value paused'; }
+            } else if (detected) {
+                dot.className = 'motion-dot detected';
+                title.textContent = '¡Movimiento detectado!';
+                title.className = 'motion-title detected';
+                motionPanel.className = 'motion-panel active-motion';
+                if (recStatus) { recStatus.textContent = 'Grabando'; recStatus.className = 'value recording'; }
+            } else {
+                dot.className = 'motion-dot';
+                title.textContent = 'Sin movimiento';
+                title.className = 'motion-title';
+                motionPanel.className = 'motion-panel inactive-motion';
+                if (recStatus) { recStatus.textContent = 'Grabando'; recStatus.className = 'value recording'; }
+            }
+            if (scoreVal) scoreVal.textContent = score;
+            let effectiveTime = accumulatedRecordingTime;
+            if (!recordingPausedByMotion && bufferStartTime) {
+                effectiveTime += (Date.now() - bufferStartTime - totalPausedTime);
+            }
+            if (accumTime) accumTime.textContent = formatDuration(effectiveTime);
+        }
+
+        function checkMotion() {
+            if (!motionDetectionActive || !stream || !motionCtx) return;
+            const video = document.getElementById('cameraFeed');
+            if (!video || video.readyState < 2) return;
+            try {
+                motionCtx.drawImage(video, 0, 0, motionCanvas.width, motionCanvas.height);
+                const frameData = motionCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
+                const data = frameData.data;
+                if (!previousFrameData) {
+                    previousFrameData = new Uint8ClampedArray(data);
+                    return;
+                }
+                let motionScore = 0;
+                const sample = MOTION_CONFIG.sampleSize;
+                const thresh = MOTION_CONFIG.threshold;
+                const w = motionCanvas.width;
+                const h = motionCanvas.height;
+                for (let y = 0; y < h; y += sample) {
+                    for (let x = 0; x < w; x += sample) {
+                        const pos = (x + y * w) * 4;
+                        const b1 = (data[pos] + data[pos+1] + data[pos+2]) / 3;
+                        const b2 = (previousFrameData[pos] + previousFrameData[pos+1] + previousFrameData[pos+2]) / 3;
+                        if (Math.abs(b1 - b2) > thresh) motionScore++;
+                    }
+                }
+                previousFrameData.set(data);
+                motionWarmupCounter++;
+                if (motionWarmupCounter < MOTION_CONFIG.warmupFrames) return;
+                motionScoreHistory.push(motionScore);
+                if (motionScoreHistory.length > 5) motionScoreHistory.shift();
+                const avgScore = Math.round(
+                    (motionScoreHistory.reduce((a,b) => a+b, 0) / motionScoreHistory.length) * MOTION_CONFIG.sensitivity
+                );
+                const motionDetected = avgScore >= MOTION_CONFIG.minMotionScore;
+                const now = Date.now();
+                if (motionDetected) {
+                    motionLastDetectedTime = now;
+                    if (recordingPausedByMotion) {
+                        resumeRecordingFromPause();
+                    }
+                }
+                const timeSinceMotion = now - motionLastDetectedTime;
+                if (!recordingPausedByMotion && timeSinceMotion > MOTION_CONFIG.noMotionTimeout) {
+                    pauseRecordingForMotion();
+                }
+                updateMotionPanel(motionDetected, avgScore);
+            } catch (err) {
+                console.error('❌ Error detección movimiento:', err);
+            }
+        }
+
+        function pauseRecordingForMotion() {
+            if (recordingPausedByMotion) return;
+            console.log('⏸ 8 min sin movimiento - Pausando grabación y temporizador');
+            recordingPausedByMotion = true;
+            pauseStartTime = Date.now();
+            showMotionPanel();
+            accumulatedRecordingTime += (pauseStartTime - bufferStartTime - totalPausedTime);
+            if (bufferMediaRecorder && bufferMediaRecorder.state !== 'inactive') {
+                bufferMediaRecorder.stop();
+            }
+            if (delayMediaRecorder && delayMediaRecorder.state !== 'inactive') {
+                delayMediaRecorder.stop();
+            }
+            const delayedVideo = document.getElementById('delayedVideo');
+            if (delayedVideo) delayedVideo.pause();
+            playBeep(400, 400, 'square');
+        }
+
+        function resumeRecordingFromPause() {
+            if (!recordingPausedByMotion) return;
+            console.log('🎬 Movimiento detectado - Reanudando grabación desde donde quedó');
+            hideMotionPanel();
+            const pauseDuration = Date.now() - pauseStartTime;
+            totalPausedTime += pauseDuration;
+            recordingPausedByMotion = false;
+            pauseStartTime = 0;
+            if (stream) {
+                if (delayMediaSource && delayMediaSource.readyState === 'open') {
+                    try { delayMediaSource.endOfStream(); } catch(e) {}
+                }
+                delayMediaSource = null;
+                delaySourceBuffer = null;
+                delayQueue = [];
+                isMSEReady = false;
+                const delayedVideo = document.getElementById('delayedVideo');
+                if (delayedVideo) {
+                    delayedVideo.pause();
+                    delayedVideo.removeAttribute('src');
+                    delayedVideo.load();
+                }
+                setTimeout(() => initMSEDelaySystem(), 100);
+                const options = {
+                    mimeType: 'video/webm;codecs=vp9,opus',
+                    audioBitsPerSecond: 128000,
+                    videoBitsPerSecond: 2500000
+                };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm;codecs=vp8,opus';
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options.mimeType = 'video/webm';
+                    }
+                }
+                try {
+                    bufferMediaRecorder = new MediaRecorder(stream, options);
+                    bufferMediaRecorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            const now = Date.now();
+                            const segmentDuration = 1000;
+                            const blobEntry = {
+                                blob: event.data,
+                                startTime: lastSegmentEndTime,
+                                endTime: lastSegmentEndTime + segmentDuration,
+                                timestamp: now,
+                                duration: segmentDuration,
+                                id: 'seg_' + now + '_' + lastSegmentEndTime
+                            };
+                            circularBuffer.push(blobEntry);
+                            lastSegmentEndTime += segmentDuration;
+                            totalBufferDuration = lastSegmentEndTime;
+                            const maxDuration = BUFFER_DURATION_MS;
+                            while (circularBuffer.length > 0 &&
+                                   (totalBufferDuration - circularBuffer[0].startTime) > maxDuration) {
+                                circularBuffer.shift();
+                            }
+                            if (circularBuffer.length > 0 && circularBuffer[0].startTime > 0) {
+                                const offset = circularBuffer[0].startTime;
+                                circularBuffer.forEach(b => {
+                                    b.startTime -= offset;
+                                    b.endTime -= offset;
+                                });
+                                lastSegmentEndTime -= offset;
+                                totalBufferDuration = lastSegmentEndTime;
+                            }
+                        }
+                    };
+                    bufferMediaRecorder.onstop = () => { console.log('⏹ Buffer recorder detenido'); };
+                    bufferMediaRecorder.onerror = (err) => { console.error('❌ Error buffer recorder:', err); };
+                    bufferMediaRecorder.start(1000);
+                } catch (err) {
+                    console.error('❌ Error reiniciando buffer recorder:', err);
+                }
+            }
+            playBeep(1000, 150, 'sine');
+            console.log('✅ Grabación reanudada. Tiempo acumulado:', formatDuration(accumulatedRecordingTime));
+        }
+
+        // ==================== SISTEMA DE PAUSA MANUAL ====================
+        let manualRecordingPaused = false;
+        let manualPauseStartTime = 0;
+        let manualTotalPausedTime = 0;
+        let manualAccumulatedTime = 0;
+
+        function toggleManualRecordingPause() {
+            if (manualRecordingPaused) {
+                resumeManualRecording();
+            } else {
+                pauseManualRecording();
+            }
+        }
+
+        function pauseManualRecording() {
+            if (manualRecordingPaused) return;
+            console.log('⏹ OFF CAMARA presionado - Pausando grabación y temporizador');
+            manualRecordingPaused = true;
+            manualPauseStartTime = Date.now();
+            if (bufferStartTime) {
+                manualAccumulatedTime = (Date.now() - bufferStartTime) - manualTotalPausedTime - totalPausedTime;
+            }
+            if (bufferMediaRecorder && bufferMediaRecorder.state !== 'inactive') {
+                bufferMediaRecorder.stop();
+            }
+            if (delayMediaRecorder && delayMediaRecorder.state !== 'inactive') {
+                delayMediaRecorder.stop();
+            }
+            const delayedVideo = document.getElementById('delayedVideo');
+            if (delayedVideo) delayedVideo.pause();
+            updateStopButtonUI(true);
+            playBeep(400, 300, 'square');
+        }
+
+        function resumeManualRecording() {
+            if (!manualRecordingPaused) return;
+            console.log('▶️ ON CAMARA presionado - Reanudando grabación y temporizador');
+            const pauseDuration = Date.now() - manualPauseStartTime;
+            manualTotalPausedTime += pauseDuration;
+            manualRecordingPaused = false;
+            manualPauseStartTime = 0;
+            if (stream) {
+                if (delayMediaSource && delayMediaSource.readyState === 'open') {
+                    try { delayMediaSource.endOfStream(); } catch(e) {}
+                }
+                delayMediaSource = null;
+                delaySourceBuffer = null;
+                delayQueue = [];
+                isMSEReady = false;
+                const delayedVideo = document.getElementById('delayedVideo');
+                if (delayedVideo) {
+                    delayedVideo.pause();
+                    delayedVideo.removeAttribute('src');
+                    delayedVideo.load();
+                }
+                setTimeout(() => initMSEDelaySystem(), 100);
+                const options = {
+                    mimeType: 'video/webm;codecs=vp9,opus',
+                    audioBitsPerSecond: 128000,
+                    videoBitsPerSecond: 2500000
+                };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm;codecs=vp8,opus';
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options.mimeType = 'video/webm';
+                    }
+                }
+                try {
+                    bufferMediaRecorder = new MediaRecorder(stream, options);
+                    bufferMediaRecorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            const now = Date.now();
+                            const segmentDuration = 1000;
+                            const blobEntry = {
+                                blob: event.data,
+                                startTime: lastSegmentEndTime,
+                                endTime: lastSegmentEndTime + segmentDuration,
+                                timestamp: now,
+                                duration: segmentDuration,
+                                id: 'seg_' + now + '_' + lastSegmentEndTime
+                            };
+                            circularBuffer.push(blobEntry);
+                            lastSegmentEndTime += segmentDuration;
+                            totalBufferDuration = lastSegmentEndTime;
+                            const maxDuration = BUFFER_DURATION_MS;
+                            while (circularBuffer.length > 0 &&
+                                   (totalBufferDuration - circularBuffer[0].startTime) > maxDuration) {
+                                circularBuffer.shift();
+                            }
+                            if (circularBuffer.length > 0 && circularBuffer[0].startTime > 0) {
+                                const offset = circularBuffer[0].startTime;
+                                circularBuffer.forEach(b => {
+                                    b.startTime -= offset;
+                                    b.endTime -= offset;
+                                });
+                                lastSegmentEndTime -= offset;
+                                totalBufferDuration = lastSegmentEndTime;
+                            }
+                        }
+                    };
+                    bufferMediaRecorder.onstop = () => { console.log('⏹ Buffer recorder detenido (manual)'); };
+                    bufferMediaRecorder.onerror = (err) => { console.error('❌ Error buffer recorder (manual):', err); };
+                    bufferMediaRecorder.start(1000);
+                } catch (err) {
+                    console.error('❌ Error reiniciando buffer recorder (manual):', err);
+                }
+            }
+            updateStopButtonUI(false);
+            playBeep(1000, 150, 'sine');
+            console.log('✅ Grabación reanudada. Tiempo acumulado:', formatDuration(manualAccumulatedTime));
+        }
+
+        function updateStopButtonUI(isPaused) {
+            const btnHeader = document.getElementById('btnStopRecording');
+            if (btnHeader) {
+                if (isPaused) {
+                    btnHeader.classList.remove('recording');
+                    btnHeader.classList.add('paused');
+                    btnHeader.innerHTML = '▶️ ON CAMARA';
+                } else {
+                    btnHeader.classList.remove('paused');
+                    btnHeader.classList.add('recording');
+                    btnHeader.innerHTML = '⏹ OFF CAMARA';
+                }
+            }
+            const btnBar = document.getElementById('btnStopRecBar');
+            if (btnBar) {
+                if (isPaused) {
+                    btnBar.style.background = '#f39c12';
+                    btnBar.innerHTML = '▶️ ON CAMARA';
+                } else {
+                    btnBar.style.background = '#c0392b';
+                    btnBar.innerHTML = '⏹ OFF CAMARA';
+                }
+            }
+        }
+
+        function stopMotionDetection() {
+            motionDetectionActive = false;
+            if (motionCheckInterval) {
+                clearInterval(motionCheckInterval);
+                motionCheckInterval = null;
+            }
+            if (motionCanvas) {
+                motionCanvas.remove();
+                motionCanvas = null;
+                motionCtx = null;
+            }
+            if (motionPanel) {
+                motionPanel.remove();
+                motionPanel = null;
+            }
+            previousFrameData = null;
+            motionScoreHistory = [];
+            motionWarmupCounter = 0;
+            if (recordingPausedByMotion) {
+                recordingPausedByMotion = false;
+                totalPausedTime += (Date.now() - pauseStartTime);
+                pauseStartTime = 0;
+            }
+            const btn = document.getElementById('btnMotionToggle');
+            if (btn) {
+                btn.classList.remove('active');
+                btn.style.background = '';
+            }
+            console.log('🔍 Detección de movimiento detenida');
+            playBeep(600, 100, 'sine');
+        }
+
+        function toggleMotionDetection() {
+            if (!motionDetectionActive) {
+                initMotionDetection();
+            } else {
+                if (motionPanel && motionPanel.classList.contains('visible')) {
+                    hideMotionPanel();
+                } else {
+                    showMotionPanel();
+                }
+            }
+        }
+
+        // ==================== MSE PARA REPRODUCCIÓN ====================
+        function initPlaybackMSE() {
+            cleanupPlaybackMSE();
+            const video = document.getElementById('playbackVideo');
+            const mimeType = 'video/webm; codecs="vp9,opus"';
+            const altMime = 'video/webm; codecs="vp8,opus"';
+            const finalMime = MediaSource.isTypeSupported(mimeType) ? mimeType : altMime;
+            if (!window.MediaSource || !MediaSource.isTypeSupported(finalMime)) {
+                console.warn('⚠️ MSE no soportado, usando fallback');
+                return false;
+            }
+            try {
+                playbackMSE = new MediaSource();
+                playbackMSE.addEventListener('sourceopen', () => {
+                    console.log('📂 MSE Playback abierto');
+                    try {
+                        playbackSourceBuffer = playbackMSE.addSourceBuffer(finalMime);
+                        playbackSourceBuffer.mode = 'sequence';
+                        playbackSourceBuffer.addEventListener('updateend', processPlaybackAppendQueue);
+                        playbackMSEReady = true;
+                        console.log('✅ SourceBuffer playback listo');
+                        loadPlaybackSegments();
+                    } catch (e) {
+                        console.error('❌ Error SourceBuffer playback:', e);
+                    }
+                });
+                playbackMSE.addEventListener('sourceended', () => console.log('⏹ MSE Playback ended'));
+                playbackMSE.addEventListener('error', (e) => console.error('❌ MSE Playback error:', e));
+                video.src = URL.createObjectURL(playbackMSE);
+                video.play().catch(() => {});
+                return true;
+            } catch (err) {
+                console.error('❌ Error MSE playback:', err);
+                return false;
+            }
+        }
+
+        function loadPlaybackSegments() {
+            if (!playbackMSEReady || !playbackSourceBuffer) return;
+            const segmentsToLoad = circularBuffer.filter(b => b.endTime <= playbackPosition);
+            segmentsToLoad.forEach(seg => {
+                if (!playbackAppendedSegments.has(seg.id)) {
+                    playbackAppendQueue.push(seg);
+                    playbackAppendedSegments.add(seg.id);
+                }
+            });
+            processPlaybackAppendQueue();
+        }
+
+        function processPlaybackAppendQueue() {
+            if (!playbackSourceBuffer || playbackSourceBuffer.updating) return;
+            if (playbackAppendQueue.length === 0) return;
+            const seg = playbackAppendQueue.shift();
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    if (playbackSourceBuffer && !playbackSourceBuffer.updating) {
+                        playbackSourceBuffer.appendBuffer(reader.result);
+                    }
+                } catch (e) {
+                    console.error('❌ Error appendBuffer playback:', e.message);
+                }
+            };
+            reader.readAsArrayBuffer(seg.blob);
+        }
+
+        function cleanupPlaybackMSE() {
+            playbackMSEReady = false;
+            playbackAppendQueue = [];
+            playbackAppendedSegments.clear();
+            if (playbackSourceBuffer) {
+                try {
+                    if (playbackMSE && playbackMSE.readyState === 'open') {
+                        playbackMSE.endOfStream();
+                    }
+                } catch(e) {}
+                playbackSourceBuffer = null;
+            }
+            if (playbackMSE) {
+                playbackMSE = null;
+            }
+            const video = document.getElementById('playbackVideo');
+            if (video) {
+                video.pause();
+                video.removeAttribute('src');
+                video.load();
+            }
+        }
+
+        // ==================== SLIDER DEL BUFFER ====================
+        function initBufferSliderEvents() {
+            const sliderWrapper = document.getElementById('bufferSliderWrapper');
+            const sliderThumb = document.getElementById('bufferSliderThumb');
+            const sliderTooltip = document.getElementById('bufferSliderTooltip');
+            if (!sliderWrapper || !sliderThumb) return;
+            sliderThumb.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startBufferSliderDrag(e.clientX);
+            });
+            sliderWrapper.addEventListener('mousedown', (e) => {
+                if (e.target === sliderThumb) return;
+                startBufferSliderDrag(e.clientX);
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (isSliderDragging) {
+                    updateBufferSliderDrag(e.clientX);
+                }
+            });
+            document.addEventListener('mouseup', () => {
+                if (isSliderDragging) {
+                    endBufferSliderDrag();
+                }
+            });
+            sliderThumb.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startBufferSliderDrag(e.touches[0].clientX);
+            }, { passive: false });
+            sliderWrapper.addEventListener('touchstart', (e) => {
+                if (e.target === sliderThumb) return;
+                startBufferSliderDrag(e.touches[0].clientX);
+            }, { passive: false });
+            document.addEventListener('touchmove', (e) => {
+                if (isSliderDragging) {
+                    e.preventDefault();
+                    updateBufferSliderDrag(e.touches[0].clientX);
+                }
+            }, { passive: false });
+            document.addEventListener('touchend', () => {
+                if (isSliderDragging) {
+                    endBufferSliderDrag();
+                }
+            });
+            sliderWrapper.addEventListener('mousemove', (e) => {
+                if (isSliderDragging) return;
+                const rect = sliderWrapper.getBoundingClientRect();
+                const percentage = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+                const timeMs = (percentage / 100) * totalBufferDuration;
+                sliderTooltip.textContent = formatDuration(timeMs);
+                sliderTooltip.style.left = (e.clientX - rect.left) + 'px';
+                sliderTooltip.classList.add('visible');
+            });
+            sliderWrapper.addEventListener('mouseleave', () => {
+                if (!isSliderDragging) {
+                    sliderTooltip.classList.remove('visible');
+                }
+            });
+        }
+
+        function startBufferSliderDrag(clientX) {
+            isSliderDragging = true;
+            const sliderThumb = document.getElementById('bufferSliderThumb');
+            const sliderTooltip = document.getElementById('bufferSliderTooltip');
+            sliderThumb.classList.add('dragging');
+            sliderTooltip.classList.add('visible');
+            if (!isPaused) {
+                isPaused = true;
+                updateBufferStatus();
+            }
+            updateBufferSliderDrag(clientX);
+        }
+
+        function updateBufferSliderDrag(clientX) {
+            if (!isSliderDragging) return;
+            const sliderWrapper = document.getElementById('bufferSliderWrapper');
+            const rect = sliderWrapper.getBoundingClientRect();
+            const percentage = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+            playbackPosition = (percentage / 100) * totalBufferDuration;
+            updateBufferSliderUI();
+            if (isPlaybackActive) {
+                const video = document.getElementById('playbackVideo');
+                if (video && video.currentTime !== undefined) {
+                    const targetTime = playbackPosition / 1000;
+                    if (Math.abs(video.currentTime - targetTime) > 2) {
+                        video.currentTime = targetTime;
+                    }
+                }
+            }
+        }
+
+        function endBufferSliderDrag() {
+            isSliderDragging = false;
+            const sliderThumb = document.getElementById('bufferSliderThumb');
+            const sliderTooltip = document.getElementById('bufferSliderTooltip');
+            sliderThumb.classList.remove('dragging');
+            sliderTooltip.classList.remove('visible');
+            if (playbackPosition < totalBufferDuration - 500) {
+                isPlayingFromBuffer = true;
+                isPaused = false;
+                updateBufferStatus();
+                if (playbackMSEReady) {
+                    loadPlaybackSegments();
+                }
+                const video = document.getElementById('playbackVideo');
+                if (video) {
+                    video.currentTime = playbackPosition / 1000;
+                    video.play().catch(() => {});
+                }
+            } else {
+                goToLive();
+            }
+        }
+
+        function updateBufferSliderUI() {
+            const sliderWrapper = document.getElementById('bufferSliderWrapper');
+            const sliderThumb = document.getElementById('bufferSliderThumb');
+            const sliderProgress = document.getElementById('bufferSliderProgress');
+            const sliderTooltip = document.getElementById('bufferSliderTooltip');
+            if (!sliderWrapper || totalBufferDuration === 0) return;
+            const rect = sliderWrapper.getBoundingClientRect();
+            const percentage = Math.min(100, Math.max(0, (playbackPosition / totalBufferDuration) * 100));
+            const pixelPos = (percentage / 100) * rect.width;
+            sliderThumb.style.left = pixelPos + 'px';
+            sliderProgress.style.width = percentage + '%';
+            const timeStr = formatDuration(playbackPosition);
+            document.getElementById('panelPosition').textContent = timeStr;
+            document.getElementById('bufferPosition').textContent = timeStr;
+            sliderTooltip.textContent = timeStr;
+            sliderTooltip.style.left = pixelPos + 'px';
+            document.getElementById('panelDuration').textContent = formatDuration(totalBufferDuration);
+            document.getElementById('bufferTotalDuration').textContent = formatDuration(totalBufferDuration);
+        }
+
+        function updateBufferStatus() {
+            const statusDot = document.getElementById('bufferStatusDot');
+            const statusText = document.getElementById('bufferStatusText');
+            const btnPause = document.getElementById('btnBufferPause');
+            const btnLive = document.getElementById('btnBufferLive');
+            const btnLiveMain = document.getElementById('btnGoLive');
+            const btnLiveMainPause = document.getElementById('btnLivePause');
+            if (isPaused) {
+                statusDot.classList.add('paused');
+                statusText.textContent = 'Pausado';
+                if (btnPause) btnPause.textContent = '▶️ REANUDAR';
+                if (btnLiveMainPause) btnLiveMainPause.textContent = '▶️ REANUDAR';
+            } else {
+                statusDot.classList.remove('paused');
+                if (isPlayingFromBuffer) {
+                    statusText.textContent = 'Reproduciendo buffer...';
+                } else {
+                    statusText.textContent = 'Grabando...';
+                }
+                if (btnPause) btnPause.textContent = '⏸️ PAUSAR';
+                if (btnLiveMainPause) btnLiveMainPause.textContent = '⏸️ PAUSAR';
+            }
+            if (btnLive) {
+                if (!isPlayingFromBuffer) {
+                    btnLive.classList.add('active');
+                } else {
+                    btnLive.classList.remove('active');
+                }
+            }
+            if (btnLiveMain) {
+                if (!isPlayingFromBuffer) {
+                    btnLiveMain.classList.add('active');
+                } else {
+                    btnLiveMain.classList.remove('active');
+                }
+            }
+        }
+
+        // ==================== FUNCIONES DE CONTROL ====================
+        function openBufferScreen() {
+            const overlay = document.getElementById('playbackOverlay');
+            overlay.classList.add('active');
+            isPlaybackActive = true;
+            const mseReady = initPlaybackMSE();
+            document.getElementById('bufferStartTime').textContent = bufferStartTime ? formatTime(new Date(bufferStartTime)) : '--:--:--';
+            document.getElementById('panelStartTime').textContent = bufferStartTime ? formatTime(new Date(bufferStartTime)) : '--:--:--';
+            if (!isPlayingFromBuffer) {
+                playbackPosition = totalBufferDuration;
+            }
+            updateBufferSliderUI();
+            updateBufferStatus();
+            generateBufferTimeMarkers();
+            console.log('📼 Pantalla de buffer abierta');
+        }
+
+        function closeBufferScreen() {
+            const overlay = document.getElementById('playbackOverlay');
+            overlay.classList.remove('active');
+            isPlaybackActive = false;
+            cleanupPlaybackMSE();
+            console.log('📼 Pantalla de buffer cerrada');
+        }
+
+        function goToLive() {
+            if (isPlaybackActive) {
+                closeBufferScreen();
+            }
+            isPlayingFromBuffer = false;
+            playbackPosition = totalBufferDuration;
+            isPaused = false;
+            updateBufferStatus();
+            updateLiveRecordingTime();
+            console.log('📡 Volviendo a en vivo');
+            playBeep(1000, 100, 'sine');
+        }
+
+        function togglePausePlay() {
+            isPaused = !isPaused;
+            updateBufferStatus();
+            const video = document.getElementById('playbackVideo');
+            if (video) {
+                if (isPaused) {
+                    video.pause();
+                } else {
+                    video.play().catch(() => {});
+                }
+            }
+        }
+
+        function goBack10s() {
+            if (totalBufferDuration === 0) return;
+            playbackPosition = Math.max(0, playbackPosition - 10000);
+            isPlayingFromBuffer = true;
+            isPaused = false;
+            updateBufferSliderUI();
+            updateBufferStatus();
+            if (!isPlaybackActive) {
+                openBufferScreen();
+            } else {
+                const video = document.getElementById('playbackVideo');
+                if (video) {
+                    video.currentTime = playbackPosition / 1000;
+                }
+            }
+            playBeep(800, 50, 'sine');
+        }
+
+        function goForward10s() {
+            if (totalBufferDuration === 0) return;
+            playbackPosition = Math.min(totalBufferDuration, playbackPosition + 10000);
+            if (playbackPosition >= totalBufferDuration - 500) {
+                goToLive();
+                return;
+            }
+            isPlayingFromBuffer = true;
+            isPaused = false;
+            updateBufferSliderUI();
+            updateBufferStatus();
+            if (!isPlaybackActive) {
+                openBufferScreen();
+            } else {
+                const video = document.getElementById('playbackVideo');
+                if (video) {
+                    video.currentTime = playbackPosition / 1000;
+                }
+            }
+            playBeep(800, 50, 'sine');
+        }
+
+        function goBack30s() {
+            if (totalBufferDuration === 0) return;
+            playbackPosition = Math.max(0, playbackPosition - 30000);
+            isPlayingFromBuffer = true;
+            isPaused = false;
+            updateBufferSliderUI();
+            updateBufferStatus();
+            if (!isPlaybackActive) {
+                openBufferScreen();
+            } else {
+                const video = document.getElementById('playbackVideo');
+                if (video) {
+                    video.currentTime = playbackPosition / 1000;
+                }
+            }
+            playBeep(800, 50, 'sine');
+        }
+
+        function goForward30s() {
+            if (totalBufferDuration === 0) return;
+            playbackPosition = Math.min(totalBufferDuration, playbackPosition + 30000);
+            if (playbackPosition >= totalBufferDuration - 500) {
+                goToLive();
+                return;
+            }
+            isPlayingFromBuffer = true;
+            isPaused = false;
+            updateBufferSliderUI();
+            updateBufferStatus();
+            if (!isPlaybackActive) {
+                openBufferScreen();
+            } else {
+                const video = document.getElementById('playbackVideo');
+                if (video) {
+                    video.currentTime = playbackPosition / 1000;
+                }
+            }
+            playBeep(800, 50, 'sine');
+        }
+
+        function updatePlaybackVideo() {
+            if (!isPlaybackActive) return;
+            document.getElementById('playbackTotal').textContent = formatDuration(totalBufferDuration);
+            document.getElementById('playbackPosition').textContent = formatDuration(playbackPosition);
+            const video = document.getElementById('playbackVideo');
+            if (video && !isPaused && isPlayingFromBuffer) {
+                const expectedTime = playbackPosition / 1000;
+                if (Math.abs(video.currentTime - expectedTime) > 1) {
+                    video.currentTime = expectedTime;
+                }
+            }
+        }
+
+        function generateBufferTimeMarkers() {
+            const container = document.getElementById('bufferTimeMarkers');
+            if (!container) return;
+            container.innerHTML = '';
+            const minutes = Math.ceil(totalBufferDuration / 60000);
+            for (let i = 0; i <= minutes; i++) {
+                const marker = document.createElement('div');
+                marker.className = 'slider-time-marker';
+                marker.textContent = i + 'm';
+                container.appendChild(marker);
+            }
+        }
+
+        // ==================== UTILIDADES ====================
+        function formatDuration(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+
+        function formatTime(date) {
+            return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        function pad(num) {
+            return num.toString().padStart(2, '0');
+        }
+
+        // ==================== MODALES Y REINICIO ====================
+        function showResetModal() {
+            document.getElementById('resetModal').classList.add('active');
+        }
+
+        function hideResetModal() {
+            document.getElementById('resetModal').classList.remove('active');
+        }
+
+        function confirmResetFromHeader() {
+            showResetModal();
+        }
+
+        function confirmReset() {
+            players.forEach(p => p.score = 0);
+            renderPlayers();
+            stopDelaySystem();
+            stopBufferRecording();
+            accumulatedRecordingTime = 0;
+            totalPausedTime = 0;
+            pauseStartTime = 0;
+            recordingPausedByMotion = false;
+            motionLastDetectedTime = Date.now();
+            motionWarmupCounter = 0;
+            motionScoreHistory = [];
+            manualRecordingPaused = false;
+            manualPauseStartTime = 0;
+            manualTotalPausedTime = 0;
+            manualAccumulatedTime = 0;
+            updateStopButtonUI(false);
+            setTimeout(() => {
+                if (stream) {
+                    initMSEDelaySystem();
+                    startBufferRecording();
+                }
+            }, 500);
+            hideResetModal();
+            playBeep(600, 200);
+            console.log('🔄 Juego reiniciado - Grabación nueva iniciada');
+        }
+
+        // ==================== FULLSCREEN ====================
+        function toggleFullscreen() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (!document.fullscreenElement && 
+                !document.mozFullScreenElement && 
+                !document.webkitFullscreenElement && 
+                !document.msFullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.mozRequestFullScreen) {
+                    document.documentElement.mozRequestFullScreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) {
+                    document.documentElement.msRequestFullscreen();
+                }
+                btn.innerHTML = '⛶';
+                btn.title = 'Salir de Pantalla Completa';
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                btn.innerHTML = '⛶';
+                btn.title = 'Pantalla Completa';
+            }
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+        document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
+        document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
+
+        function updateFullscreenIcon() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (document.fullscreenElement || 
+                document.webkitFullscreenElement || 
+                document.mozFullScreenElement || 
+                document.msFullscreenElement) {
+                btn.innerHTML = '⛶';
+                btn.title = 'Salir de Pantalla Completa';
+            } else {
+                btn.innerHTML = '⛶';
+                btn.title = 'Pantalla Completa';
+            }
+        }
+
+        // ==================== INICIALIZACIÓN ====================
+        
+        // ==================== MOSTRAR/OCULTAR BOTÓN CAMBIAR PIN ====================
+        let pinButtonVisible = false;
+
+        function togglePinButtonVisibility() {
+            const btn = document.getElementById('btnCambiarPin');
+            if (!btn) return;
+
+            pinButtonVisible = !pinButtonVisible;
+
+            if (pinButtonVisible) {
+                btn.style.display = 'inline-block';
+                btn.style.visibility = 'visible';
+                btn.style.opacity = '1';
+                console.log('👁️ Botón CAMBIAR PIN visible');
+            } else {
+                btn.style.display = 'none';
+                btn.style.visibility = 'hidden';
+                btn.style.opacity = '0';
+                console.log('🙈 Botón CAMBIAR PIN oculto');
+            }
+        }
+
+async function init() {
+            // Verificar si ya hay mesa configurada, sino continuar sin bloquear
+            showMesaSelector();
+            // Si no está configurado, usar un ID temporal (la transmisión no funcionará hasta configurar)
+            if (!BROADCASTER_ID) {
+                BROADCASTER_ID = 'mesa-pendiente-configuracion';
+            }
+            initPlayers();
+            initBufferSliderEvents();
+            setTimeout(findAndConnectCamera, 500);
+            const delayedVideo = document.getElementById('delayedVideo');
+            if (delayedVideo) delayedVideo.muted = !soundEnabled;
+            const cameraFeed = document.getElementById('cameraFeed');
+            if (cameraFeed) cameraFeed.muted = !soundEnabled;
+            const soundBtn = document.getElementById('btnSoundToggle');
+            if (soundBtn) {
+                soundBtn.textContent = '🔇';
+                soundBtn.classList.add('muted');
+            }
+            setTimeout(() => {
+                initMotionDetection();
+                hideMotionPanel();
+            }, 2000);
+            navigator.mediaDevices.addEventListener('devicechange', () => {
+                console.log('🔄 Dispositivos cambiados, reescaneando...');
+                setTimeout(() => {
+                    if (!currentDeviceId) {
+                        findAndConnectCamera();
+                    }
+                }, 1000);
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+            }
+            if (e.code === 'KeyV') toggleSound();
+            if (e.code === 'KeyC') {
+                // Solo si no estamos en un input
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                const isInputFocused = activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.isContentEditable;
+                if (!isInputFocused) {
+                    toggleCambiarMesaButton();
+                }
+            }
+            if (e.code === 'KeyB') {
+                // Solo si no estamos en un input
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                const isInputFocused = activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.isContentEditable;
+                if (!isInputFocused) {
+                    showMesaConfigOverlay();
+                }
+            }
+            if (e.code === 'KeyN') {
+                togglePinButtonVisibility();
+            }
+        });
+
+        // Función para mostrar/ocultar botón Cambiar Mesa
+        window.toggleCambiarMesaButton = function() {
+            const btn = document.getElementById('btnCambiarMesa');
+            if (!btn) return;
+            if (btn.style.display === 'none') {
+                btn.style.display = 'inline-block';
+                console.log('👁️ Botón CAMBIAR MESA visible');
+            } else {
+                btn.style.display = 'none';
+                console.log('🙈 Botón CAMBIAR MESA oculto');
+            }
+        };
+
+        window.addEventListener('beforeunload', () => {
+            if (broadcastPeer) {
+                broadcastPeer.destroy();
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            stopMotionDetection();
+            stopDelaySystem();
+            stopBufferRecording();
+            cleanupPlaybackMSE();
+            manualRecordingPaused = false;
+            manualPauseStartTime = 0;
+        });
+
+        init();
+    </script>
+
+    <script>
+    // ==================== SISTEMA DE CAMBIO DE PIN (FUNCIONAL) ====================
+    let CURRENT_ADMIN_PIN = localStorage.getItem('mesa1_admin_pin') || "1234";
+
+    Object.defineProperty(window, 'ADMIN_PIN', {
+        get: function() { return CURRENT_ADMIN_PIN; },
+        set: function(val) { CURRENT_ADMIN_PIN = val; },
+        configurable: true
+    });
+
+    function showPinChangeModal() {
+        closePinChangeModal();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'pinChangeOverlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10,10,26,0.98); z-index: 99998;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            font-family: 'Segoe UI', sans-serif; padding: 20px;
+            animation: fadeIn 0.3s ease-out;
+        `;
+
+        overlay.innerHTML = `
+            <div id="pinChangeContent" style="background: #16213e; padding: 40px; border-radius: 20px; border: 3px solid #3498db; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 0 40px rgba(52, 152, 219, 0.3);">
+                <div style="font-size: 3em; margin-bottom: 15px;">🔐</div>
+                <h2 style="color: #3498db; margin-bottom: 10px; font-size: 1.5em;">Cambiar PIN de Acceso</h2>
+                <p style="color: #888; margin-bottom: 25px; font-size: 0.85em;">
+                    Ingresa tu PIN actual y luego el nuevo PIN de 4 dígitos
+                </p>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #aaa; font-size: 0.8em; display: block; margin-bottom: 8px; text-align: left;">PIN Actual:</label>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input current" id="currentPin1" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #3498db;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input current" id="currentPin2" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #3498db;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input current" id="currentPin3" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #3498db;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input current" id="currentPin4" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #3498db;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 25px;">
+                    <label style="color: #aaa; font-size: 0.8em; display: block; margin-bottom: 8px; text-align: left;">Nuevo PIN (4 dígitos):</label>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input new" id="newPin1" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #2ecc71;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input new" id="newPin2" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #2ecc71;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input new" id="newPin3" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #2ecc71;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="pin-change-input new" id="newPin4" style="
+                            width: 50px; height: 55px;
+                            background: #0a0a1a;
+                            border: 2px solid #0f3460;
+                            border-radius: 10px;
+                            color: #2ecc71;
+                            font-size: 1.8em;
+                            font-weight: bold;
+                            text-align: center;
+                            outline: none;
+                            transition: all 0.3s;
+                            caret-color: transparent;
+                            -webkit-text-security: disc;
+                        ">
+                    </div>
+                </div>
+
+                <div id="pinChangeMessage" style="
+                    color: #e74c3c;
+                    font-size: 0.9em;
+                    margin-bottom: 15px;
+                    min-height: 20px;
+                    font-weight: bold;
+                    opacity: 0;
+                    transition: opacity 0.3s;
+                "></div>
+
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button onclick="closePinChangeModal()" style="padding: 12px 25px; background: #7f8c8d; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95em; font-weight: bold; transition: all 0.3s; flex: 1;">
+                        ❌ Cancelar
+                    </button>
+                    <button onclick="processPinChange()" style="padding: 12px 25px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95em; font-weight: bold; transition: all 0.3s; flex: 1;">
+                        💾 Guardar PIN
+                    </button>
+                </div>
+
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #0f3460;">
+                    <p style="color: #555; font-size: 0.75em; margin: 0;">
+                        🔒 El PIN se guarda localmente en este dispositivo
+                    </p>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const style = document.createElement('style');
+        style.id = 'pinChangeStyles';
+        style.textContent = `
+            .pin-change-input:focus {
+                border-color: #3498db !important;
+                box-shadow: 0 0 15px rgba(52, 152, 219, 0.5) !important;
+                transform: scale(1.05);
+            }
+            .pin-change-input.new:focus {
+                border-color: #2ecc71 !important;
+                box-shadow: 0 0 15px rgba(46, 204, 113, 0.5) !important;
+            }
+            .pin-change-input.filled {
+                border-color: #2ecc71 !important;
+                background: rgba(46, 204, 113, 0.15) !important;
+            }
+            .pin-change-input.error {
+                border-color: #e74c3c !important;
+                background: rgba(231, 76, 60, 0.15) !important;
+                animation: shakePin 0.5s ease-in-out;
+            }
+            @keyframes shakePin {
+                0%, 100% { transform: translateX(0); }
+                20% { transform: translateX(-8px); }
+                40% { transform: translateX(8px); }
+                60% { transform: translateX(-4px); }
+                80% { transform: translateX(4px); }
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(-20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        setupPinChangeInputs();
+
+        setTimeout(() => {
+            const firstInput = document.getElementById('currentPin1');
+            if (firstInput) firstInput.focus();
+        }, 100);
+    }
+
+    function setupPinChangeInputs() {
+        const currentInputs = document.querySelectorAll('.pin-change-input.current');
+        currentInputs.forEach((input, index) => {
+            input.addEventListener('keydown', (e) => handlePinInput(e, currentInputs, index, 'new'));
+            input.addEventListener('paste', (e) => handlePinPaste(e, currentInputs));
+            input.addEventListener('contextmenu', (e) => e.preventDefault());
+        });
+
+        const newInputs = document.querySelectorAll('.pin-change-input.new');
+        newInputs.forEach((input, index) => {
+            input.addEventListener('keydown', (e) => handlePinInput(e, newInputs, index, null));
+            input.addEventListener('paste', (e) => handlePinPaste(e, newInputs));
+            input.addEventListener('contextmenu', (e) => e.preventDefault());
+        });
+    }
+
+    function handlePinInput(e, inputs, index, nextGroup) {
+        if (e.key >= '0' && e.key <= '9') {
+            e.target.value = e.key;
+            e.target.classList.add('filled');
+            if (index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            } else if (nextGroup) {
+                const nextInputs = document.querySelectorAll('.pin-change-input.' + nextGroup);
+                if (nextInputs.length > 0) {
+                    setTimeout(() => nextInputs[0].focus(), 100);
+                }
+            }
+            e.preventDefault();
+        } else if (e.key === 'Backspace') {
+            if (e.target.value === '' && index > 0) {
+                inputs[index - 1].focus();
+                inputs[index - 1].value = '';
+                inputs[index - 1].classList.remove('filled');
+            } else {
+                e.target.value = '';
+                e.target.classList.remove('filled');
+            }
+            e.preventDefault();
+        } else if (e.key === 'Enter') {
+            processPinChange();
+            e.preventDefault();
+        } else if (e.key === 'ArrowLeft' && index > 0) {
+            inputs[index - 1].focus();
+            e.preventDefault();
+        } else if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+            inputs[index + 1].focus();
+            e.preventDefault();
+        } else {
+            e.preventDefault();
+        }
+    }
+
+    function handlePinPaste(e, inputs) {
+        e.preventDefault();
+        const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+        if (pasteData) {
+            pasteData.split('').forEach((char, i) => {
+                if (inputs[i]) {
+                    inputs[i].value = char;
+                    inputs[i].classList.add('filled');
+                }
+            });
+            if (pasteData.length === 4) {
+                setTimeout(processPinChange, 200);
+            } else if (inputs[pasteData.length]) {
+                inputs[pasteData.length].focus();
+            }
+        }
+    }
+
+    function processPinChange() {
+        const currentInputs = document.querySelectorAll('.pin-change-input.current');
+        let enteredCurrentPin = '';
+        currentInputs.forEach(input => enteredCurrentPin += input.value);
+
+        const newInputs = document.querySelectorAll('.pin-change-input.new');
+        let enteredNewPin = '';
+        newInputs.forEach(input => enteredNewPin += input.value);
+
+        // Validar PIN actual
+        if (enteredCurrentPin !== CURRENT_ADMIN_PIN) {
+            showPinMessage('❌ PIN actual incorrecto', 'error');
+            currentInputs.forEach(input => {
+                input.classList.add('error');
+                input.value = '';
+                input.classList.remove('filled');
+            });
+            setTimeout(() => {
+                currentInputs.forEach(input => input.classList.remove('error'));
+                currentInputs[0].focus();
+            }, 600);
+            return;
+        }
+
+        // Validar nuevo PIN
+        if (enteredNewPin.length !== 4 || !/^\d{4}$/.test(enteredNewPin)) {
+            showPinMessage('❌ El nuevo PIN debe tener exactamente 4 dígitos', 'error');
+            newInputs.forEach(input => input.classList.add('error'));
+            setTimeout(() => {
+                newInputs.forEach(input => {
+                    input.classList.remove('error');
+                    input.value = '';
+                    input.classList.remove('filled');
+                });
+                newInputs[0].focus();
+            }, 600);
+            return;
+        }
+
+        if (enteredNewPin === CURRENT_ADMIN_PIN) {
+            showPinMessage('❌ El nuevo PIN debe ser diferente al actual', 'error');
+            return;
+        }
+
+        // GUARDAR EL NUEVO PIN
+        CURRENT_ADMIN_PIN = enteredNewPin;
+        localStorage.setItem('mesa1_admin_pin', enteredNewPin);
+
+        showPinMessage('✅ PIN cambiado exitosamente', 'success');
+
+        currentInputs.forEach(input => {
+            input.value = '';
+            input.classList.remove('filled');
+        });
+        newInputs.forEach(input => {
+            input.value = '';
+            input.classList.remove('filled');
+        });
+
+        setTimeout(() => {
+            closePinChangeModal();
+            console.log('🔐 PIN cambiado exitosamente');
+        }, 1500);
+    }
+
+    function showPinMessage(text, type) {
+        const messageDiv = document.getElementById('pinChangeMessage');
+        if (!messageDiv) return;
+        messageDiv.textContent = text;
+        messageDiv.style.color = type === 'success' ? '#2ecc71' : '#e74c3c';
+        messageDiv.style.opacity = '1';
+
+        if (type === 'success') {
+            setTimeout(() => { messageDiv.style.opacity = '0'; }, 2000);
+        }
+    }
+
+    function closePinChangeModal() {
+        const overlay = document.getElementById('pinChangeOverlay');
+        const styles = document.getElementById('pinChangeStyles');
+        if (overlay) overlay.remove();
+        if (styles) styles.remove();
+    }
+
+    function logoutPin() {
+        sessionStorage.removeItem('mesa1_pin_verified');
+        sessionStorage.removeItem('mesa1_pin_time');
+        window.location.reload();
+    }
+    </script>
+</body>
+</html>
