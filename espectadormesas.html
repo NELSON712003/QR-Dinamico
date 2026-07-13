@@ -877,7 +877,10 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            if (e.code === 'KeyM') {
+            // Solo activar atajo si NO estamos en un input, textarea o contenteditable
+            const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+            const isInputFocused = activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.isContentEditable;
+            if (e.code === 'KeyM' && !isInputFocused) {
                 e.preventDefault();
                 toggleMute();
             }
